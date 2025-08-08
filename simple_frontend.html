@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧪 A/B 테스트 시스템</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .alert {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .test-list {
+            margin-top: 30px;
+        }
+        .test-item {
+            background: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border: 1px solid #e9ecef;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 A/B 테스트 시스템</h1>
+        
+        <div id="alerts"></div>
+        
+        <h2>➕ 테스트 생성</h2>
+        <form id="create-form">
+            <div class="form-group">
+                <label for="test-name">테스트명</label>
+                <input type="text" id="test-name" placeholder="예: 스마트폰 A/B 테스트" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="product-name">상품명</label>
+                <input type="text" id="product-name" placeholder="예: 갤럭시 S24 Ultra" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="product-image">상품 이미지 URL</label>
+                <input type="url" id="product-image" placeholder="https://example.com/image.jpg" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="description">상품 설명</label>
+                <textarea id="description" rows="4" placeholder="상품에 대한 자세한 설명을 입력하세요..." required></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label for="price">가격 (원)</label>
+                <input type="number" id="price" value="1000000" min="0" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="category">카테고리</label>
+                <input type="text" id="category" placeholder="예: 스마트폰" required>
+            </div>
+            
+            <button type="submit">🚀 테스트 생성</button>
+        </form>
+        
+        <div class="test-list">
+            <h2>📋 테스트 목록</h2>
+            <button onclick="loadTests()">새로고침</button>
+            <div id="tests"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:5001';
+        
+        // 페이지 로드 시 테스트 목록 로드
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTests();
+        });
+        
+        // 테스트 생성 폼 제출
+        document.getElementById('create-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                test_name: document.getElementById('test-name').value,
+                product_name: document.getElementById('product-name').value,
+                product_image: document.getElementById('product-image').value,
+                product_description: document.getElementById('description').value,
+                price: parseFloat(document.getElementById('price').value),
+                category: document.getElementById('category').value,
+                duration_days: 14,
+                target_metrics: {
+                    ctr: 0.6,
+                    conversion_rate: 0.4
+                }
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/ab-test/create`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showAlert('✅ 테스트가 성공적으로 생성되었습니다!', 'success');
+                    document.getElementById('create-form').reset();
+                    loadTests();
+                } else {
+                    showAlert(`❌ 테스트 생성 실패: ${result.detail || '알 수 없는 오류'}`, 'error');
+                }
+            } catch (error) {
+                showAlert('❌ 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.', 'error');
+            }
+        });
+        
+        // 테스트 목록 로드
+        async function loadTests() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/ab-test/list`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const tests = data.tests;
+                    
+                    if (tests.length === 0) {
+                        document.getElementById('tests').innerHTML = '<p>아직 생성된 테스트가 없습니다.</p>';
+                        return;
+                    }
+                    
+                    const testList = tests.map(test => `
+                        <div class="test-item">
+                            <h3>${test.test_name}</h3>
+                            <p><strong>상품:</strong> ${test.product_name}</p>
+                            <p><strong>상태:</strong> ${test.status}</p>
+                            <p><strong>변형 수:</strong> ${test.variants_count}</p>
+                            <p><strong>생성일:</strong> ${test.created_at.slice(0, 10)}</p>
+                            <button onclick="startTest('${test.test_id}')" ${test.status !== 'draft' ? 'disabled' : ''}>🚀 시작</button>
+                            <button onclick="viewResults('${test.test_id}')">📊 결과 보기</button>
+                        </div>
+                    `).join('');
+                    
+                    document.getElementById('tests').innerHTML = testList;
+                } else {
+                    document.getElementById('tests').innerHTML = '<p>테스트 목록을 불러올 수 없습니다.</p>';
+                }
+            } catch (error) {
+                document.getElementById('tests').innerHTML = '<p>서버에 연결할 수 없습니다.</p>';
+            }
+        }
+        
+        // 테스트 시작
+        async function startTest(testId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/ab-test/action`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        test_id: testId,
+                        action: 'start'
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.status === 'success') {
+                    showAlert('🚀 테스트가 시작되었습니다!', 'success');
+                    loadTests();
+                } else {
+                    showAlert(`❌ 테스트 시작 실패: ${result.message || '알 수 없는 오류'}`, 'error');
+                }
+            } catch (error) {
+                showAlert('❌ 서버에 연결할 수 없습니다.', 'error');
+            }
+        }
+        
+        // 결과 보기
+        async function viewResults(testId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/ab-test/${testId}/results`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const results = data.results;
+                    const resultsHtml = `
+                        <div class="test-item">
+                            <h3>📊 ${results.test_name} 결과</h3>
+                            <p><strong>총 노출:</strong> ${results.total_impressions}</p>
+                            <p><strong>총 클릭:</strong> ${results.total_clicks}</p>
+                            <p><strong>총 전환:</strong> ${results.total_conversions}</p>
+                            <p><strong>총 수익:</strong> ₩${results.total_revenue.toLocaleString()}</p>
+                            ${results.winner ? `<p><strong>🏆 승자:</strong> ${results.winner}</p>` : '<p><strong>🤔 아직 승자가 결정되지 않았습니다.</strong></p>'}
+                        </div>
+                    `;
+                    
+                    // 결과를 새 창으로 열기
+                    const newWindow = window.open('', '_blank');
+                    newWindow.document.write(`
+                        <html>
+                            <head><title>테스트 결과</title></head>
+                            <body style="font-family: Arial, sans-serif; padding: 20px;">
+                                ${resultsHtml}
+                            </body>
+                        </html>
+                    `);
+                } else {
+                    showAlert(`❌ 결과를 불러올 수 없습니다: ${data.detail || '알 수 없는 오류'}`, 'error');
+                }
+            } catch (error) {
+                showAlert('❌ 서버에 연결할 수 없습니다.', 'error');
+            }
+        }
+        
+        // 알림 표시
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            
+            document.getElementById('alerts').appendChild(alertDiv);
+            
+            // 5초 후 알림 제거
+            setTimeout(() => alertDiv.remove(), 5000);
+        }
+    </script>
+</body>
+</html>
