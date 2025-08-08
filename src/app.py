@@ -1,12 +1,21 @@
 import os
 import json
 import threading
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from contextlib import asynccontextmanager
+from datetime import datetime
+import uuid
 
 import uvicorn
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Form, File, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from confluent_kafka import Producer, Consumer, KafkaException
+
+# A/B 테스트 모듈 import
+from .ab_test_manager import ab_test_manager, ProductInfo, PageVariant, TestStatus, VariantType
+from .page_generator import page_generator
 
 # --- 설정 (변경 없음) ---
 KAFKA_BROKER = 'localhost:9092'
@@ -22,6 +31,31 @@ elif MODE == "kubernetes":
 
 if MODE != "development":
     print(f"Kafka Broker is set to {KAFKA_BROKER}")
+
+# --- Pydantic 모델 ---
+class CreateTestRequest(BaseModel):
+    test_name: str
+    product_name: str
+    product_image: str
+    product_description: str
+    price: float
+    category: str
+    tags: Optional[List[str]] = []
+    duration_days: int = 14
+    target_metrics: Optional[Dict[str, float]] = None
+
+class TestEventRequest(BaseModel):
+    test_id: str
+    variant_id: str
+    event_type: str  # "impression", "click", "conversion", "bounce"
+    user_id: str
+    session_id: str
+    revenue: Optional[float] = 0.0
+    session_duration: Optional[float] = 0.0
+
+class TestActionRequest(BaseModel):
+    test_id: str
+    action: str  # "start", "pause", "complete"
 
 # --- Kafka Consumer ---
 def consume_messages():
@@ -54,7 +88,6 @@ def consume_messages():
     finally:
         print("Consumer closing...")
         consumer.close()
-
 
 # --- Lifespan 이벤트 핸들러 ---
 @asynccontextmanager
@@ -89,8 +122,17 @@ async def lifespan(app: FastAPI):
 # --- FastAPI 앱 생성 ---
 app = FastAPI(
     lifespan=lifespan,
-    title="Confluent Kafka FastAPI Example",
-    description="FastAPI application using the confluent-kafka library and lifespan events."
+    title="상품 상세페이지 A/B 테스트 시스템",
+    description="상품 이미지와 설명을 바탕으로 다양한 상세페이지를 생성하고 A/B 테스트를 수행하는 시스템"
+)
+
+# CORS 미들웨어 추가
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # --- Kafka 전송 로직을 처리하는 헬퍼 함수 ---
@@ -129,7 +171,7 @@ def delivery_report(err, msg):
     else:
         print(f'Message delivered to {msg.topic()} [{msg.partition()}]')
 
-# --- API 엔드포인트 ---
+# --- A/B 테스트 API 엔드포인트 ---
 
 @app.get('/python')
 def running_test():
@@ -149,6 +191,284 @@ async def health_check(request: Request):
          raise HTTPException(status_code=503, detail="Producer is not available")
     return {"status": "OK"}
 
+# --- A/B 테스트 관리 API ---
+
+@app.post("/api/ab-test/create", summary="A/B 테스트 생성")
+async def create_ab_test(request: CreateTestRequest):
+    """새로운 A/B 테스트 생성"""
+    try:
+        # 상품 정보 생성
+        product_info = ProductInfo(
+            product_id=str(uuid.uuid4()),
+            product_name=request.product_name,
+            product_image=request.product_image,
+            product_description=request.product_description,
+            price=request.price,
+            category=request.category,
+            tags=request.tags or []
+        )
+        
+        # 페이지 변형 생성
+        page_variants = []
+        variants_data = page_generator.generate_page_variants({
+            "product_name": request.product_name,
+            "product_image": request.product_image,
+            "product_description": request.product_description,
+            "price": request.price,
+            "category": request.category
+        })
+        
+        for variant_data in variants_data:
+            page_variant = PageVariant(
+                variant_id=variant_data["variant_id"],
+                variant_type=VariantType(variant_data["variant_type"]),
+                title=variant_data["title"],
+                description=variant_data["description"],
+                layout_type=variant_data["layout_type"],
+                color_scheme=variant_data["color_scheme"],
+                cta_text=variant_data["cta_text"],
+                cta_color=variant_data["cta_color"],
+                cta_position=variant_data["cta_position"],
+                additional_features=variant_data["additional_features"],
+                image_style=variant_data["image_style"],
+                font_style=variant_data["font_style"],
+                created_at=datetime.now(),
+                is_active=True
+            )
+            page_variants.append(page_variant)
+        
+        # A/B 테스트 생성
+        test = ab_test_manager.create_test(
+            test_name=request.test_name,
+            product_info=product_info,
+            variants=page_variants,
+            duration_days=request.duration_days,
+            target_metrics=request.target_metrics
+        )
+        
+        return {
+            "status": "success",
+            "test_id": test.test_id,
+            "message": "A/B 테스트가 성공적으로 생성되었습니다."
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"테스트 생성 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/ab-test/list", summary="A/B 테스트 목록 조회")
+async def get_ab_tests():
+    """모든 A/B 테스트 목록 조회"""
+    try:
+        tests = ab_test_manager.get_all_tests()
+        return {
+            "status": "success",
+            "tests": tests,
+            "total_count": len(tests)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"테스트 목록 조회 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/ab-test/{test_id}", summary="A/B 테스트 상세 조회")
+async def get_ab_test_detail(test_id: str):
+    """특정 A/B 테스트 상세 정보 조회"""
+    try:
+        test = ab_test_manager.tests.get(test_id)
+        if not test:
+            raise HTTPException(status_code=404, detail="테스트를 찾을 수 없습니다.")
+        
+        results = ab_test_manager.get_test_results(test_id)
+        return {
+            "status": "success",
+            "test": {
+                "test_id": test.test_id,
+                "test_name": test.test_name,
+                "status": test.status.value,
+                "start_date": test.start_date.isoformat(),
+                "end_date": test.end_date.isoformat() if test.end_date else None,
+                "product_info": {
+                    "product_name": test.product_info.product_name,
+                    "product_image": test.product_info.product_image,
+                    "product_description": test.product_info.product_description,
+                    "price": test.product_info.price,
+                    "category": test.product_info.category
+                },
+                "variants_count": len(test.variants),
+                "target_metrics": test.target_metrics
+            },
+            "results": results
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"테스트 조회 중 오류가 발생했습니다: {str(e)}")
+
+@app.post("/api/ab-test/action", summary="A/B 테스트 액션 수행")
+async def perform_test_action(request: TestActionRequest):
+    """테스트 시작/일시정지/완료"""
+    try:
+        if request.action == "start":
+            success = ab_test_manager.start_test(request.test_id)
+            message = "테스트가 시작되었습니다." if success else "테스트를 시작할 수 없습니다."
+        elif request.action == "pause":
+            success = ab_test_manager.pause_test(request.test_id)
+            message = "테스트가 일시정지되었습니다." if success else "테스트를 일시정지할 수 없습니다."
+        elif request.action == "complete":
+            success = ab_test_manager.complete_test(request.test_id)
+            message = "테스트가 완료되었습니다." if success else "테스트를 완료할 수 없습니다."
+        else:
+            raise HTTPException(status_code=400, detail="잘못된 액션입니다.")
+        
+        return {
+            "status": "success" if success else "error",
+            "message": message
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"테스트 액션 수행 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/ab-test/{test_id}/results", summary="A/B 테스트 결과 조회")
+async def get_test_results(test_id: str):
+    """테스트 결과 및 통계 조회"""
+    try:
+        results = ab_test_manager.get_test_results(test_id)
+        if not results:
+            raise HTTPException(status_code=404, detail="테스트 결과를 찾을 수 없습니다.")
+        
+        return {
+            "status": "success",
+            "results": results
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"테스트 결과 조회 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/ab-test/{test_id}/events", summary="A/B 테스트 이벤트 조회")
+async def get_test_events(test_id: str, limit: int = 100):
+    """테스트 이벤트 목록 조회"""
+    try:
+        events = ab_test_manager.get_test_events(test_id, limit)
+        return {
+            "status": "success",
+            "events": events,
+            "total_count": len(events)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"이벤트 조회 중 오류가 발생했습니다: {str(e)}")
+
+@app.post("/api/ab-test/event", summary="A/B 테스트 이벤트 기록")
+async def record_test_event(request: TestEventRequest):
+    """테스트 이벤트 기록 (노출, 클릭, 전환 등)"""
+    try:
+        success = ab_test_manager.record_event(
+            test_id=request.test_id,
+            variant_id=request.variant_id,
+            user_id=request.user_id,
+            event_type=request.event_type,
+            session_id=request.session_id,
+            revenue=request.revenue,
+            session_duration=request.session_duration
+        )
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="테스트를 찾을 수 없습니다.")
+        
+        return {
+            "status": "success",
+            "message": "이벤트가 성공적으로 기록되었습니다."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"이벤트 기록 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/ab-test/{test_id}/variant/{user_id}", summary="사용자별 변형 조회")
+async def get_user_variant(test_id: str, user_id: str, session_id: str = "default"):
+    """사용자에게 표시할 변형 조회"""
+    try:
+        variant = ab_test_manager.get_variant_for_user(test_id, user_id, session_id)
+        if not variant:
+            raise HTTPException(status_code=404, detail="활성 테스트를 찾을 수 없습니다.")
+        
+        return {
+            "status": "success",
+            "variant": {
+                "variant_id": variant.variant_id,
+                "variant_type": variant.variant_type.value,
+                "title": variant.title,
+                "description": variant.description,
+                "layout_type": variant.layout_type,
+                "color_scheme": variant.color_scheme,
+                "cta_text": variant.cta_text,
+                "cta_color": variant.cta_color,
+                "cta_position": variant.cta_position,
+                "additional_features": variant.additional_features,
+                "image_style": variant.image_style,
+                "font_style": variant.font_style
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"변형 조회 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/ab-test/{test_id}/page/{variant_id}", response_class=HTMLResponse, summary="상세페이지 HTML 생성")
+async def generate_product_page(test_id: str, variant_id: str):
+    """특정 변형의 상세페이지 HTML 생성"""
+    try:
+        test = ab_test_manager.tests.get(test_id)
+        if not test:
+            raise HTTPException(status_code=404, detail="테스트를 찾을 수 없습니다.")
+        
+        variant = next((v for v in test.variants if v.variant_id == variant_id), None)
+        if not variant:
+            raise HTTPException(status_code=404, detail="변형을 찾을 수 없습니다.")
+        
+        # 변형 데이터를 딕셔너리로 변환
+        variant_data = {
+            "variant_id": variant.variant_id,
+            "variant_type": variant.variant_type.value,
+            "title": variant.title,
+            "description": variant.description,
+            "layout_type": variant.layout_type,
+            "color_scheme": variant.color_scheme,
+            "cta_text": variant.cta_text,
+            "cta_color": variant.cta_color,
+            "cta_position": variant.cta_position,
+            "additional_features": variant.additional_features,
+            "image_style": variant.image_style,
+            "font_style": variant.font_style,
+            "template": {
+                "css_styles": {
+                    "primary_color": "#2563eb",
+                    "secondary_color": "#f8fafc",
+                    "text_color": "#1e293b",
+                    "cta_color": variant.cta_color,
+                    "font_family": "'Inter', sans-serif"
+                },
+                "html_structure": f"{variant.layout_type}_{variant.color_scheme}"
+            }
+        }
+        
+        # 상품 정보
+        product_info = {
+            "product_name": test.product_info.product_name,
+            "product_image": test.product_info.product_image,
+            "product_description": test.product_info.product_description,
+            "price": test.product_info.price,
+            "category": test.product_info.category
+        }
+        
+        # HTML 페이지 생성
+        html_content = page_generator.generate_html_page(variant_data, product_info)
+        
+        return HTMLResponse(content=html_content)
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"페이지 생성 중 오류가 발생했습니다: {str(e)}")
 
 # --- 메인 실행 (미사용) ---
 if __name__ == '__main__':
