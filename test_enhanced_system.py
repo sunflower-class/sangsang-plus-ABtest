@@ -169,7 +169,7 @@ def test_event_tracking(test_id):
             "session_duration": 0.0
         }
         
-        response = requests.post(f"{API_BASE_URL}/api/ab-test/event", json=impression_event)
+        response = requests.post(f"{API_BASE_URL}/api/abtest/event", json=impression_event)
         if response.status_code == 200:
             print("✅ 노출 이벤트 기록 성공")
         else:
@@ -186,7 +186,7 @@ def test_event_tracking(test_id):
             "session_duration": 5.0
         }
         
-        response = requests.post(f"{API_BASE_URL}/api/ab-test/event", json=click_event)
+        response = requests.post(f"{API_BASE_URL}/api/abtest/event", json=click_event)
         if response.status_code == 200:
             print("✅ 클릭 이벤트 기록 성공")
         else:
@@ -203,7 +203,7 @@ def test_event_tracking(test_id):
             "session_duration": 120.0
         }
         
-        response = requests.post(f"{API_BASE_URL}/api/ab-test/event", json=purchase_event)
+        response = requests.post(f"{API_BASE_URL}/api/abtest/event", json=purchase_event)
         if response.status_code == 200:
             print("✅ 구매 이벤트 기록 성공")
         else:

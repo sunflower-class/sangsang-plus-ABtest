@@ -48,7 +48,7 @@ def test_create_ab_test():
     }
     
     try:
-        response = requests.post(f"{BASE_URL}/api/ab-test/create", json=test_data)
+        response = requests.post(f"{BASE_URL}/api/abtest/create", json=test_data)
         if response.status_code == 200:
             result = response.json()
             test_id = result["test_id"]
@@ -67,7 +67,7 @@ def test_get_ab_tests():
     print("\n🔍 A/B 테스트 목록 조회 테스트...")
     
     try:
-        response = requests.get(f"{BASE_URL}/api/ab-test/list")
+        response = requests.get(f"{BASE_URL}/api/abtest/list")
         if response.status_code == 200:
             result = response.json()
             tests = result["tests"]
@@ -87,7 +87,7 @@ def test_start_ab_test(test_id):
     print(f"\n🔍 A/B 테스트 시작 테스트 (ID: {test_id})...")
     
     try:
-        response = requests.post(f"{BASE_URL}/api/ab-test/action", json={
+        response = requests.post(f"{BASE_URL}/api/abtest/action", json={
             "test_id": test_id,
             "action": "start"
         })
@@ -115,7 +115,7 @@ def test_get_user_variant(test_id):
     
     try:
         for user_id in user_ids:
-            response = requests.get(f"{BASE_URL}/api/ab-test/{test_id}/variant/{user_id}")
+            response = requests.get(f"{BASE_URL}/api/abtest/{test_id}/variant/{user_id}")
             if response.status_code == 200:
                 result = response.json()
                 variant = result["variant"]
@@ -144,7 +144,7 @@ def test_record_events(test_id, variants):
             variant_type = variants[user_id]
             
             # 변형 ID 찾기
-            response = requests.get(f"{BASE_URL}/api/ab-test/{test_id}/variant/{user_id}")
+            response = requests.get(f"{BASE_URL}/api/abtest/{test_id}/variant/{user_id}")
             if response.status_code != 200:
                 continue
             
@@ -161,7 +161,7 @@ def test_record_events(test_id, variants):
                 "session_duration": random.uniform(10, 300)
             }
             
-            response = requests.post(f"{BASE_URL}/api/ab-test/event", json=event_data)
+            response = requests.post(f"{BASE_URL}/api/abtest/event", json=event_data)
             if response.status_code == 200:
                 print(f"  - {user_id} ({variant_type}): {event_type} 이벤트 기록")
             else:
@@ -178,7 +178,7 @@ def test_get_results(test_id):
     print(f"\n🔍 테스트 결과 조회 테스트 (ID: {test_id})...")
     
     try:
-        response = requests.get(f"{BASE_URL}/api/ab-test/{test_id}/results")
+        response = requests.get(f"{BASE_URL}/api/abtest/{test_id}/results")
         if response.status_code == 200:
             result = response.json()
             results = result["results"]
@@ -218,7 +218,7 @@ def test_generate_page(test_id):
     
     try:
         # 테스트 정보 조회
-        response = requests.get(f"{BASE_URL}/api/ab-test/{test_id}")
+        response = requests.get(f"{BASE_URL}/api/abtest/{test_id}")
         if response.status_code != 200:
             print(f"❌ 테스트 정보 조회 실패: {response.status_code}")
             return False
@@ -227,7 +227,7 @@ def test_generate_page(test_id):
         variants = test_info["test"]["variants_count"]
         
         # 테스트 정보에서 실제 variant_id 가져오기
-        test_response = requests.get(f"{BASE_URL}/api/ab-test/{test_id}")
+        test_response = requests.get(f"{BASE_URL}/api/abtest/{test_id}")
         if test_response.status_code != 200:
             print(f"❌ 테스트 정보 조회 실패: {test_response.status_code}")
             return False
@@ -236,13 +236,13 @@ def test_generate_page(test_id):
         test_variants = test_data["test"]["variants_count"]
         
         # 실제 variant_id를 사용하여 페이지 생성 테스트
-        results_response = requests.get(f"{BASE_URL}/api/ab-test/{test_id}/results")
+        results_response = requests.get(f"{BASE_URL}/api/abtest/{test_id}/results")
         if results_response.status_code == 200:
             results_data = results_response.json()
             variant_ids = list(results_data["results"]["variants"].keys())
             
             for i, variant_id in enumerate(variant_ids[:2]):  # 최대 2개 변형만 테스트
-                response = requests.get(f"{BASE_URL}/api/ab-test/{test_id}/page/{variant_id}")
+                response = requests.get(f"{BASE_URL}/api/abtest/{test_id}/page/{variant_id}")
                 if response.status_code == 200:
                     html_content = response.text
                     if "<!DOCTYPE html>" in html_content and ("product" in html_content or "갤럭시" in html_content or "스마트폰" in html_content):

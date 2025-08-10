@@ -454,7 +454,7 @@ class PageGenerator:
         
         function trackEvent(eventType, variantId) {{
             // 이벤트 추적 API 호출
-            fetch('/api/ab-test/event', {{
+            fetch('/api/abtest/event', {{
                 method: 'POST',
                 headers: {{
                     'Content-Type': 'application/json',

@@ -60,7 +60,7 @@ def show_dashboard():
     
     try:
         # 테스트 목록 조회
-        response = requests.get(f"{API_BASE_URL}/api/ab-test/list")
+        response = requests.get(f"{API_BASE_URL}/api/abtest/list")
         if response.status_code == 200:
             data = response.json()
             tests = data["tests"]
@@ -187,7 +187,7 @@ def create_test():
                 }
                 
                 try:
-                    response = requests.post(f"{API_BASE_URL}/api/ab-test/create", json=test_data)
+                    response = requests.post(f"{API_BASE_URL}/api/abtest/create", json=test_data)
                     if response.status_code == 200:
                         result = response.json()
                         # 생성된 테스트를 세션에 저장
@@ -205,7 +205,7 @@ def create_test():
 def start_test(test_id):
     """테스트 시작"""
     try:
-        response = requests.post(f"{API_BASE_URL}/api/ab-test/action", json={
+        response = requests.post(f"{API_BASE_URL}/api/abtest/action", json={
             "test_id": test_id,
             "action": "start"
         })
@@ -222,7 +222,7 @@ def manage_tests():
     st.header("📊 테스트 관리")
     
     try:
-        response = requests.get(f"{API_BASE_URL}/api/ab-test/list")
+        response = requests.get(f"{API_BASE_URL}/api/abtest/list")
         if response.status_code == 200:
             data = response.json()
             tests = data["tests"]
@@ -281,7 +281,7 @@ def manage_tests():
 def pause_test(test_id):
     """테스트 일시정지"""
     try:
-        response = requests.post(f"{API_BASE_URL}/api/ab-test/action", json={
+        response = requests.post(f"{API_BASE_URL}/api/abtest/action", json={
             "test_id": test_id,
             "action": "pause"
         })
@@ -296,7 +296,7 @@ def pause_test(test_id):
 def complete_test(test_id):
     """테스트 완료"""
     try:
-        response = requests.post(f"{API_BASE_URL}/api/ab-test/action", json={
+        response = requests.post(f"{API_BASE_URL}/api/abtest/action", json={
             "test_id": test_id,
             "action": "complete"
         })
@@ -314,7 +314,7 @@ def analyze_results():
     
     # 테스트 선택
     try:
-        response = requests.get(f"{API_BASE_URL}/api/ab-test/list")
+        response = requests.get(f"{API_BASE_URL}/api/abtest/list")
         if response.status_code == 200:
             data = response.json()
             tests = data["tests"]
@@ -328,7 +328,7 @@ def analyze_results():
             selected_test_id = test_options[selected_test_name]
             
             # 결과 조회
-            results_response = requests.get(f"{API_BASE_URL}/api/ab-test/{selected_test_id}/results")
+            results_response = requests.get(f"{API_BASE_URL}/api/abtest/{selected_test_id}/results")
             if results_response.status_code == 200:
                 results_data = results_response.json()
                 results = results_data["results"]
@@ -405,7 +405,7 @@ def preview_pages():
     st.header("👀 페이지 미리보기")
     
     try:
-        response = requests.get(f"{API_BASE_URL}/api/ab-test/list")
+        response = requests.get(f"{API_BASE_URL}/api/abtest/list")
         if response.status_code == 200:
             data = response.json()
             tests = data["tests"]
@@ -419,7 +419,7 @@ def preview_pages():
             selected_test_id = test_options[selected_test_name]
             
             # 테스트 결과에서 variant_id 가져오기
-            results_response = requests.get(f"{API_BASE_URL}/api/ab-test/{selected_test_id}/results")
+            results_response = requests.get(f"{API_BASE_URL}/api/abtest/{selected_test_id}/results")
             if results_response.status_code == 200:
                 results_data = results_response.json()
                 results = results_data["results"]
@@ -433,7 +433,7 @@ def preview_pages():
                     selected_variant_id = variant_options[selected_variant_name]
                     
                     # 페이지 URL 생성
-                    page_url = f"{API_BASE_URL}/api/ab-test/{selected_test_id}/page/{selected_variant_id}"
+                    page_url = f"{API_BASE_URL}/api/abtest/{selected_test_id}/page/{selected_variant_id}"
                     
                     st.info(f"페이지 URL: {page_url}")
                     
@@ -516,7 +516,7 @@ def show_ab_test_simulation():
     
     try:
         # 활성 테스트 목록 조회
-        response = requests.get(f"{API_BASE_URL}/api/ab-test/list")
+        response = requests.get(f"{API_BASE_URL}/api/abtest/list")
         if response.status_code == 200:
             data = response.json()
             tests = data["tests"]
@@ -564,7 +564,7 @@ def show_ab_test_simulation():
                 st.rerun()
             
             # 테스트 결과 조회
-            results_response = requests.get(f"{API_BASE_URL}/api/ab-test/{selected_test_id}/results")
+            results_response = requests.get(f"{API_BASE_URL}/api/abtest/{selected_test_id}/results")
             if results_response.status_code == 200:
                 results_data = results_response.json()
                 results = results_data["results"]
@@ -632,7 +632,7 @@ def simulate_user_behavior(test_id, user_count, impression_rate, click_rate, con
     import time
     
     # 테스트 정보 조회
-    response = requests.get(f"{API_BASE_URL}/api/ab-test/{test_id}/results")
+    response = requests.get(f"{API_BASE_URL}/api/abtest/{test_id}/results")
     if response.status_code != 200:
         st.error("테스트 정보를 불러올 수 없습니다.")
         return
@@ -653,7 +653,7 @@ def simulate_user_behavior(test_id, user_count, impression_rate, click_rate, con
         session_id = f"sim_session_{i+1}"
         
         # 랜덤 변형 선택 (실제 A/B 테스트 로직 사용)
-        variant_response = requests.get(f"{API_BASE_URL}/api/ab-test/{test_id}/variant/{user_id}")
+        variant_response = requests.get(f"{API_BASE_URL}/api/abtest/{test_id}/variant/{user_id}")
         if variant_response.status_code == 200:
             variant_data = variant_response.json()
             variant_id = variant_data["variant"]["variant_id"]
@@ -663,7 +663,7 @@ def simulate_user_behavior(test_id, user_count, impression_rate, click_rate, con
         
         # 노출 이벤트
         if random.randint(1, 100) <= impression_rate:
-            requests.post(f"{API_BASE_URL}/api/ab-test/event", json={
+            requests.post(f"{API_BASE_URL}/api/abtest/event", json={
                 "test_id": test_id,
                 "variant_id": variant_id,
                 "event_type": "impression",
@@ -673,7 +673,7 @@ def simulate_user_behavior(test_id, user_count, impression_rate, click_rate, con
             
             # 클릭 이벤트
             if random.randint(1, 100) <= click_rate:
-                requests.post(f"{API_BASE_URL}/api/ab-test/event", json={
+                requests.post(f"{API_BASE_URL}/api/abtest/event", json={
                     "test_id": test_id,
                     "variant_id": variant_id,
                     "event_type": "click",
@@ -684,7 +684,7 @@ def simulate_user_behavior(test_id, user_count, impression_rate, click_rate, con
                 # 구매 이벤트
                 if random.randint(1, 100) <= conversion_rate:
                     revenue = random.randint(10000, 100000)  # 랜덤 매출
-                    requests.post(f"{API_BASE_URL}/api/ab-test/event", json={
+                    requests.post(f"{API_BASE_URL}/api/abtest/event", json={
                         "test_id": test_id,
                         "variant_id": variant_id,
                         "event_type": "conversion",

@@ -235,7 +235,7 @@ async def health_check(request: Request):
 
 # --- A/B 테스트 관리 API ---
 
-@app.post("/api/ab-test/create", summary="A/B 테스트 생성")
+@app.post("/api/abtest/create", summary="A/B 테스트 생성")
 async def create_ab_test(request: CreateTestRequest):
     """새로운 A/B 테스트 생성"""
     try:
@@ -297,7 +297,7 @@ async def create_ab_test(request: CreateTestRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"테스트 생성 중 오류가 발생했습니다: {str(e)}")
 
-@app.get("/api/ab-test/list", summary="A/B 테스트 목록 조회")
+@app.get("/api/abtest/list", summary="A/B 테스트 목록 조회")
 async def get_ab_tests():
     """모든 A/B 테스트 목록 조회"""
     try:
@@ -310,7 +310,7 @@ async def get_ab_tests():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"테스트 목록 조회 중 오류가 발생했습니다: {str(e)}")
 
-@app.get("/api/ab-test/{test_id}", summary="A/B 테스트 상세 조회")
+@app.get("/api/abtest/{test_id}", summary="A/B 테스트 상세 조회")
 async def get_ab_test_detail(test_id: str):
     """특정 A/B 테스트 상세 정보 조회"""
     try:
@@ -344,7 +344,7 @@ async def get_ab_test_detail(test_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"테스트 조회 중 오류가 발생했습니다: {str(e)}")
 
-@app.post("/api/ab-test/action", summary="A/B 테스트 액션 수행")
+@app.post("/api/abtest/action", summary="A/B 테스트 액션 수행")
 async def perform_test_action(request: TestActionRequest):
     """테스트 시작/일시정지/완료"""
     try:
@@ -369,7 +369,7 @@ async def perform_test_action(request: TestActionRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"테스트 액션 수행 중 오류가 발생했습니다: {str(e)}")
 
-@app.get("/api/ab-test/{test_id}/results", summary="A/B 테스트 결과 조회")
+@app.get("/api/abtest/{test_id}/results", summary="A/B 테스트 결과 조회")
 async def get_test_results(test_id: str):
     """테스트 결과 및 통계 조회"""
     try:
@@ -386,7 +386,7 @@ async def get_test_results(test_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"테스트 결과 조회 중 오류가 발생했습니다: {str(e)}")
 
-@app.get("/api/ab-test/{test_id}/events", summary="A/B 테스트 이벤트 조회")
+@app.get("/api/abtest/{test_id}/events", summary="A/B 테스트 이벤트 조회")
 async def get_test_events(test_id: str, limit: int = 100):
     """테스트 이벤트 목록 조회"""
     try:
@@ -399,7 +399,7 @@ async def get_test_events(test_id: str, limit: int = 100):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"이벤트 조회 중 오류가 발생했습니다: {str(e)}")
 
-@app.post("/api/ab-test/event", summary="A/B 테스트 이벤트 기록")
+@app.post("/api/abtest/event", summary="A/B 테스트 이벤트 기록")
 async def record_test_event(request: TestEventRequest):
     """테스트 이벤트 기록 (노출, 클릭, 전환 등)"""
     try:
@@ -425,7 +425,7 @@ async def record_test_event(request: TestEventRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"이벤트 기록 중 오류가 발생했습니다: {str(e)}")
 
-@app.get("/api/ab-test/{test_id}/variant/{user_id}", summary="사용자별 변형 조회")
+@app.get("/api/abtest/{test_id}/variant/{user_id}", summary="사용자별 변형 조회")
 async def get_user_variant(test_id: str, user_id: str, session_id: str = "default"):
     """사용자에게 표시할 변형 조회"""
     try:
@@ -455,7 +455,7 @@ async def get_user_variant(test_id: str, user_id: str, session_id: str = "defaul
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"변형 조회 중 오류가 발생했습니다: {str(e)}")
 
-@app.get("/api/ab-test/{test_id}/page/{variant_id}", response_class=HTMLResponse, summary="상세페이지 HTML 생성")
+@app.get("/api/abtest/{test_id}/page/{variant_id}", response_class=HTMLResponse, summary="상세페이지 HTML 생성")
 async def generate_product_page(test_id: str, variant_id: str):
     """특정 변형의 상세페이지 HTML 생성"""
     try:

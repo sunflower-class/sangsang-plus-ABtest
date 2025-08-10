@@ -151,7 +151,7 @@
             };
             
             try {
-                const response = await fetch(`${API_BASE_URL}/api/ab-test/create`, {
+                const response = await fetch(`${API_BASE_URL}/api/abtest/create`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -176,7 +176,7 @@
         // 테스트 목록 로드
         async function loadTests() {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/ab-test/list`);
+                const response = await fetch(`${API_BASE_URL}/api/abtest/list`);
                 const data = await response.json();
                 
                 if (response.ok) {
@@ -211,7 +211,7 @@
         // 테스트 시작
         async function startTest(testId) {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/ab-test/action`, {
+                const response = await fetch(`${API_BASE_URL}/api/abtest/action`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -238,7 +238,7 @@
         // 결과 보기
         async function viewResults(testId) {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/ab-test/${testId}/results`);
+                const response = await fetch(`${API_BASE_URL}/api/abtest/${testId}/results`);
                 const data = await response.json();
                 
                 if (response.ok) {
