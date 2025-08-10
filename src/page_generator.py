@@ -493,3 +493,5 @@ class PageGenerator:
 
 # 전역 인스턴스
 page_generator = PageGenerator()
+
+

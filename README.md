@@ -1,275 +1,261 @@
 # 상품 상세페이지 A/B 테스트 시스템
 
-상품 이미지와 간단한 설명을 입력하면 다양한 스타일의 상세페이지를 자동으로 생성하고, A/B 테스트를 통해 최적의 페이지를 찾아주는 AI 기반 시스템입니다.
+## 📋 개요
 
-## 주요 기능
+이 프로젝트는 요구사항에 따라 구현된 **AI 기능 중심의 A/B 테스트 시스템**입니다. 
+실험 계약서부터 자동 생성, 실시간 모니터링, 가드레일까지 모든 AI 기능을 포함하며, 
+메인 프론트엔드/백엔드와 분리되어 독립적으로 운영됩니다.
 
-### 🎯 A/B 테스트 관리
-- **다양한 페이지 변형 생성**: 히어로, 그리드, 카드, 갤러리 스타일
-- **실시간 성과 추적**: CTR, 전환율, 수익 등 다양한 지표
-- **통계적 유의성 분석**: 카이제곱 검정을 통한 신뢰할 수 있는 결과
-- **사용자 일관성 보장**: 동일 사용자는 항상 같은 변형을 보게 됨
+### 🎯 목적
+- AI 기능만 구현하여 메인 시스템과 통합 가능
+- `/api/abtest/` 엔드포인트로 통일된 API 제공
+- `/docs`에서 완전한 API 문서 확인 가능
+- 테스트용 프론트엔드 제공
 
-### 🎨 페이지 생성
-- **4가지 기본 템플릿**: 모던, 클래식, 미니멀, 컬러풀
-- **동적 콘텐츠 생성**: 상품 정보에 맞는 제목, 설명 자동 생성
-- **반응형 디자인**: 모바일/데스크톱 최적화
-- **실시간 이벤트 추적**: JavaScript를 통한 사용자 행동 분석
+## 🎯 주요 기능
 
-### 📊 분석 및 최적화
-- **종합 점수 계산**: 목표 지표 기반 가중 평균
-- **승자 자동 선정**: 통계적 유의성을 고려한 최적 변형 선택
-- **실시간 대시보드**: 테스트 진행 상황 및 결과 시각화
+### 1. 실험 계약서 (Experiment Brief) - 요구사항 1번
+- **목적 설정**: 구매 전환율(CVR) 최대화 등 명확한 목표 정의
+- **핵심/보조 지표**: CVR(주), CTR/ATC/체류시간(보조)
+- **가드레일**: LCP≤3.5s, 5xx오류율≤0.5%, 반품 proxy≤x%
+- **대상 설정**: 카테고리/채널/디바이스 범위, 제외 조건
+- **분배 정책**: 2~3개 변형, 초기 균등(50:50) 또는 밴딧
+- **최소 검출 효과**: MDE 및 최소 표본수 설정
+- **종료/승격/롤백 규칙**: 자동화된 의사결정 프로세스
 
-## 시스템 아키텍처
+### 2. 변형 자동 생성 - 요구사항 2번
+- **HTML/이미지 자동 생성**: 기존 생성기 활용
+- **메타 태깅**: 레이아웃 유형, CTA 톤, 색 팔레트, 핵심 혜택 등
+- **정책 필터**: 금칙어/과장표현/상표·저작권/성능·접근성 체크
+- **성공 패턴 기반**: 카테고리별 최적화된 변형 생성
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   상품 정보     │    │   페이지 생성기  │    │   A/B 테스트    │
-│   입력          │───▶│   (4가지 변형)   │───▶│   관리자        │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                                │                        │
-                                ▼                        ▼
-                       ┌─────────────────┐    ┌─────────────────┐
-                       │   HTML 페이지   │    │   이벤트 추적   │
-                       │   생성          │    │   및 분석       │
-                       └─────────────────┘    └─────────────────┘
-```
+### 3. 실험 생성 방식 - 요구사항 3번
+- **수동 생성**: 특수 캠페인/법무 검토 필요한 SKU
+- **자동 생성 (Autopilot)**: 
+  - 스케줄러가 매일/매주 대상 SKU 자동 선별
+  - 최근 7일 세션≥X, 재고 있음, 쿨다운 통과 조건
+  - 템플릿으로 실험 자동 생성
+  - 트래픽 예산: 동시 실험 ≤20%, SKU당 동시 1개
 
-## Initialize Setting
-- Python 버전: v3.10.12
-- venv 사용
-- fastapi 서버 사용
+### 4. 트래픽 배분·노출 - 요구사항 4번
+- **Sticky Assignment**: 동일 사용자에게 실험 기간 내 항상 같은 변형
+- **배분 모드 선택**:
+  - 고트래픽: 전통 A/B(균등 분배) + 통계검정
+  - 저트래픽/롱테일: Thompson Sampling 밴딧
+  - 컨텍스트 활용: Contextual Bandit (선택)
 
-```sh
-python3 -m venv venv
-source venv/bin/activate
+### 5. 계측 (Tracking) - 요구사항 5번
+- **필수 이벤트 4종**: impression / click_detail / add_to_cart / purchase
+- **필수 공통 속성**: ts_server, user_key(해시), session_id, product_id, experiment_id, variant_id, device, channel, price, quantity
+- **품질 플래그**: bot_flag, srm_flag, guardrail_breach
+- **비동기 처리**: 사용자 지연 0에 가까운 쓰기 경로
+
+### 6. 데이터 신뢰성 - 요구사항 6번
+- **SRM 감지**: 기대 분배 대비 카이제곱 p<0.01 경고
+- **봇/이상치 필터**: 헤드리스 UA, 체류<1s, IP 폭주, 비정상 패턴 제외
+- **A/A 테스트**: 파이프 정상 검증 (초기 1회)
+- **가드레일 모니터링**: LCP/오류율/반품 proxy 임계 초과 시 자동 롤백
+
+### 7. 통계·의사결정 - 요구사항 7번
+- **Thompson Sampling**: 변형별 α=1+구매수, β=1+노출-구매
+- **최소 탐험율 5%**: 조기 과적합 방지
+- **하이어라키컬 prior**: 카테고리 평균으로 냉시작 완화
+- **사후 검증**: P(변형>대조) ≥ 95% AND 최소 표본수 충족
+- **CUPED**: 분산 감소 (선택)
+
+### 8. 승자 처리 - 요구사항 8번
+- **단계적 승격**: 25%→50%→100% (각 단계 6~24h)
+- **자동 롤백**: 승격 후 30분 이동창에서 CVR 급락(-20%↓) 시 즉시 되돌림
+- **학습 저장**: 승자 특징을 패턴 DB에 기록
+
+### 9. 대시보드/운영 UX - 요구사항 9번
+- **실시간 타일**: 변형별 Impr/CTR/CVR/매출
+- **트렌드**: 시간대별 CVR/퍼널(노출→클릭→구매)
+- **승자 확률 P**: 베이지안 CI 시각화
+- **경고 배지**: SRM/봇/가드레일
+- **제어**: 일시정지/재개, 승자 강제, 단계적 롤아웃
+- **결정 로그**: 최근 1h 밴딧 결정 사유
+
+### 10. 리포트 & 인사이트 - 요구사항 10번
+- **자동 종료 리포트**: 실험 개요, 최종 성과, 신뢰도
+- **세그먼트별 차이**: 모바일·신규 등
+- **SRM/가드레일 히스토리**: 데이터 제외율(봇)
+- **Actionables**: 구체적인 개선 제안
+- **지식화**: 승자 패턴을 변형 생성 템플릿에 반영
+
+### 11. 자동화 루프 - 요구사항 11번
+- **Autopilot**: 스케줄러가 대상 선정→실험 생성→시작까지 자동
+- **트래픽 예산 관리**: 동시실험 상한/쿨다운으로 과실험 방지
+- **프로모션 기간 글로벌 스위치**: 자동 실험 OFF
+- **승자 확정 시 쿨다운**: 다음 실험 자동 예약
+
+### 12. 예외·엣지 케이스 핸들링 - 요구사항 12번
+- **재고 급감/가격 대변동**: 실험 자동 HOLD
+- **극저트래픽 SKU**: 밴딧 + Shadow traffic
+- **다채널 유입**: 층화 분배 or 가중치 보정
+- **시즌성/외생변수**: 이벤트 태깅
+
+### 13. 거버넌스/보안 - 요구사항 13번
+- **PII 저장 금지**: 해시 user_key, 목적 제한·보존기간
+- **실험 상태머신**: draft → running → hold → completed → archived
+- **감사 로그**: 누가/무엇을/왜 기록
+
+## 🚀 설치 및 실행
+
+### 1. 의존성 설치
+```bash
 pip install -r requirements.txt
 ```
 
-## 사전 준비
-- docker: v28.x ('25.7.7 기준 lts)
-- docker compose: v2.x ('25.7.7 기준 lts)
-
-## 사용법 (도커, 개발환경)
-
-### 실행
-
+### 2. 서버 실행
 ```bash
-# 개발 환경 실행
-uvicorn src.app:app --host 0.0.0.0 --port 5001 --reload
+# API 서버 실행
+cd src
+python -m uvicorn app:app --host 0.0.0.0 --port 5001 --reload
 
-# 도커 실행
-bash ./scripts/docker-run.sh <DOCKER HUB ID> <SERVICE NAME> <SERVICE PORT: 옵션>
+# 프론트엔드 실행 (새 터미널)
+cd ..
+streamlit run frontend.py
 ```
 
-### 테스트
-
+### 3. Docker 실행
 ```bash
-# 기본 API 테스트
-curl -X GET "http://localhost:5001/python"
-
-# A/B 테스트 생성
-curl -X POST "http://localhost:5001/api/ab-test/create" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "test_name": "스마트폰 A/B 테스트",
-    "product_name": "갤럭시 S24",
-    "product_image": "https://example.com/s24.jpg",
-    "product_description": "최신 갤럭시 스마트폰",
-    "price": 1200000,
-    "category": "스마트폰",
-    "duration_days": 14
-  }'
+docker build -t ab-test-system .
+docker run -p 5001:5001 -p 8501:8501 ab-test-system
 ```
 
-## API 엔드포인트
+## 📊 API 엔드포인트 (통일된 `/api/abtest/` 경로)
 
-### A/B 테스트 관리
+### 실험 계약서 관련
+- `POST /api/abtest/create-with-brief` - 실험 계약서와 함께 테스트 생성
+- `GET /api/abtest/dashboard/metrics` - 대시보드 메트릭 조회
+- `GET /api/abtest/dashboard/test-summaries` - 테스트 요약 목록
 
-| 메서드 | 엔드포인트 | 설명 |
-|--------|------------|------|
-| POST | `/api/ab-test/create` | 새로운 A/B 테스트 생성 |
-| GET | `/api/ab-test/list` | 모든 테스트 목록 조회 |
-| GET | `/api/ab-test/{test_id}` | 특정 테스트 상세 조회 |
-| POST | `/api/ab-test/action` | 테스트 시작/일시정지/완료 |
-| GET | `/api/ab-test/{test_id}/results` | 테스트 결과 조회 |
-| GET | `/api/ab-test/{test_id}/events` | 테스트 이벤트 조회 |
+### 자동 생성기 관련
+- `GET /api/abtest/autopilot/status` - 자동 생성 상태 조회
+- `POST /api/abtest/autopilot/promotion-mode` - 프로모션 모드 설정
+- `POST /api/abtest/autopilot/run-cycle` - 자동 생성 사이클 수동 실행
 
-### 이벤트 추적
+### 밴딧 알고리즘
+- `GET /api/abtest/{test_id}/variant-bandit/{user_id}` - Thompson Sampling 변형 선택
+- `GET /api/abtest/bandit/decisions/{test_id}` - 밴딧 의사결정 로그
 
-| 메서드 | 엔드포인트 | 설명 |
-|--------|------------|------|
-| POST | `/api/ab-test/event` | 이벤트 기록 (노출, 클릭, 전환) |
-| GET | `/api/ab-test/{test_id}/variant/{user_id}` | 사용자별 변형 조회 |
+### 가드레일 모니터링
+- `GET /api/abtest/guardrails/alerts` - 가드레일 알림 조회
+- `GET /api/abtest/dashboard/real-time/{test_id}` - 실시간 메트릭
 
-### 페이지 생성
+### 승자 처리
+- `POST /api/abtest/test/{test_id}/promote-winner` - 승자 승격
+- `POST /api/abtest/test/{test_id}/auto-rollback` - 자동 롤백 실행
 
-| 메서드 | 엔드포인트 | 설명 |
-|--------|------------|------|
-| GET | `/api/ab-test/{test_id}/page/{variant_id}` | 상세페이지 HTML 생성 |
+### 리포트
+- `GET /api/abtest/report/{test_id}` - 실험 리포트 생성
+- `GET /api/abtest/report/{test_id}/pdf` - PDF 리포트 다운로드
+- `GET /api/abtest/learning/patterns` - 학습 패턴 조회
 
-## 사용 예제
+### 📖 API 문서
+서버 실행 후 `http://localhost:5001/docs`에서 완전한 API 문서를 확인할 수 있습니다.
 
-### 1. A/B 테스트 생성
+## 🏗️ 시스템 아키텍처
 
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Frontend      │    │   API Server    │    │   Autopilot     │
+│   (Streamlit)   │◄──►│   (FastAPI)     │◄──►│   Scheduler     │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                │
+                                ▼
+                       ┌─────────────────┐
+                       │  AB Test        │
+                       │  Manager        │
+                       └─────────────────┘
+                                │
+                                ▼
+                       ┌─────────────────┐
+                       │  Dashboard      │
+                       │  Manager        │
+                       └─────────────────┘
+```
+
+## 📈 사용 예시
+
+### 1. 실험 계약서 생성
 ```python
 import requests
 
-# 테스트 생성
-response = requests.post("http://localhost:5001/api/ab-test/create", json={
-    "test_name": "노트북 A/B 테스트",
-    "product_name": "MacBook Pro 16",
-    "product_image": "https://example.com/macbook.jpg",
-    "product_description": "프로페셔널을 위한 최고의 노트북",
-    "price": 3500000,
-    "category": "노트북",
-    "tags": ["애플", "프리미엄", "개발자"],
-    "duration_days": 21,
-    "target_metrics": {
-        "ctr": 0.6,
-        "conversion_rate": 0.4
-    }
-})
+brief_data = {
+    "objective": "구매 전환율(CVR) 최대화",
+    "primary_metrics": ["CVR"],
+    "secondary_metrics": ["CTR", "ATC"],
+    "guardrails": {"LCP": 3.5, "error_rate": 0.005},
+    "target_categories": ["스마트폰"],
+    "variant_count": 3,
+    "distribution_mode": "bandit",
+    "mde": 0.1,
+    "min_sample_size": 1000
+}
 
-test_id = response.json()["test_id"]
-print(f"테스트 ID: {test_id}")
+response = requests.post("http://localhost:5001/api/abtest/create-with-brief", 
+                        json=brief_data)
 ```
 
-### 2. 테스트 시작
-
+### 2. 자동 생성기 상태 확인
 ```python
-# 테스트 시작
-requests.post("http://localhost:5001/api/ab-test/action", json={
-    "test_id": test_id,
-    "action": "start"
-})
+response = requests.get("http://localhost:5001/api/abtest/autopilot/status")
+status = response.json()
+print(f"활성 실험: {status['autopilot_status']['active_autopilot_experiments']}")
 ```
 
-### 3. 사용자별 변형 조회
-
+### 3. 실시간 모니터링
 ```python
-# 사용자에게 표시할 변형 조회
-variant_response = requests.get(f"http://localhost:5001/api/ab-test/{test_id}/variant/user123")
-variant = variant_response.json()["variant"]
-print(f"사용자에게 표시할 변형: {variant['variant_type']}")
+response = requests.get("http://localhost:5001/api/abtest/dashboard/real-time/{test_id}")
+metrics = response.json()
+print(f"실시간 CVR: {metrics['metrics']['variant_metrics']}")
 ```
 
-### 4. 이벤트 기록
+## 🔧 설정
 
-```python
-# 노출 이벤트 기록
-requests.post("http://localhost:5001/api/ab-test/event", json={
-    "test_id": test_id,
-    "variant_id": variant["variant_id"],
-    "event_type": "impression",
-    "user_id": "user123",
-    "session_id": "session456"
-})
+### 환경 변수
+- `MODE`: development/docker/kubernetes
+- `KAFKA_BROKER`: Kafka 브로커 주소
+- `API_BASE_URL`: API 서버 주소
 
-# 클릭 이벤트 기록
-requests.post("http://localhost:5001/api/ab-test/event", json={
-    "test_id": test_id,
-    "variant_id": variant["variant_id"],
-    "event_type": "click",
-    "user_id": "user123",
-    "session_id": "session456"
-})
-```
+### 자동 생성기 설정
+- `max_concurrent_experiments`: 최대 동시 실험 수 (기본값: 5)
+- `max_traffic_usage`: 최대 트래픽 사용량 (기본값: 20%)
+- `min_daily_sessions`: 최소 일일 세션 수 (기본값: 100)
+- `cool_down_days`: 쿨다운 기간 (기본값: 7일)
 
-### 5. 결과 조회
+## 📝 체크리스트
 
-```python
-# 테스트 결과 조회
-results = requests.get(f"http://localhost:5001/api/ab-test/{test_id}/results").json()
-print(f"승자: {results['results']['winner']}")
-print(f"총 노출: {results['results']['total_impressions']}")
-print(f"총 클릭: {results['results']['total_clicks']}")
-```
+### "좋은 실험"의 체크리스트 (요구사항 14번)
+- [ ] 목표·MDE·기간이 사전에 문서화되어 있다
+- [ ] Sticky·SRM·봇 필터가 ON이다
+- [ ] 대조군/변형의 페이지 속도 차이가 크지 않다
+- [ ] 단 하나의 핵심지표만으로 승패를 가른다
+- [ ] 승자라도 가드레일을 깨면 배포하지 않는다
+- [ ] 리포트에 세그먼트별 차이와 학습 포인트가 포함된다
 
-## 페이지 템플릿
+### 운영 모드 요약 (요구사항 15번)
+- **일일 세션 수가 N 이상?** → A/B + 베이지안 종료
+- **아니면** → 밴딧(Thompson)
+- **프로모션/법무 이슈?** → 수동 생성
+- **아니면** → Autopilot
+- **승자 확률 ≥95% & 최소 표본 충족?** → 단계적 승격
+- **아니면** → 지속 탐험 또는 기간 상한으로 종료
 
-### 템플릿 A: 히어로 모던
-- **스타일**: 현대적이고 임팩트 있는 디자인
-- **특징**: 큰 이미지, 플로팅 CTA 버튼
-- **적합**: 프리미엄 제품, 브랜드 강조
+## 🤝 기여
 
-### 템플릿 B: 그리드 클래식
-- **스타일**: 전통적이고 안정적인 레이아웃
-- **특징**: 2열 그리드, 하단 CTA
-- **적합**: 실용적 제품, 정보 중심
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
-### 템플릿 C: 카드 미니멀
-- **스타일**: 깔끔하고 심플한 디자인
-- **특징**: 카드 형태, 중앙 CTA
-- **적합**: 미니멀 제품, 깔끔한 브랜드
-
-### 템플릿 D: 갤러리 컬러풀
-- **스타일**: 화려하고 생동감 있는 디자인
-- **특징**: 갤러리 레이아웃, 상단 CTA
-- **적합**: 패션, 라이프스타일 제품
-
-## 통계 분석
-
-### 지표 설명
-- **CTR (Click-Through Rate)**: 노출 대비 클릭 비율
-- **전환율**: 클릭 대비 구매/목표 행동 비율
-- **수익**: 총 매출액
-- **세션 지속시간**: 페이지 체류 시간
-- **이탈률**: 페이지를 떠나는 비율
-
-### 통계적 유의성
-- **카이제곱 검정**: 변형 간 성과 차이의 통계적 유의성 검증
-- **신뢰수준**: 95% (p < 0.05)
-- **최소 표본 크기**: 변형당 100회 이상 노출 권장
-
-## 배포 (쿠버네티스)
-
-### 사전 설정
-
-```bash
-# azure 설치
-curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-
-# azure 로그인
-az login --use-device-code
-
-# 쿠버네티스 클러스터 연결
-az aks get-credentials --resource-group <마이크로소프트 리소스 그룹> --name <마이크로소프트 쿠버네티스 클러스터>
-```
-
-### 쿠버네티스 설정 실행
-
-```bash
-bash scripts/kube-run.sh <DOCKER HUB ID>
-```
-
-### 추가 명령어
-
-```bash
-# 제거하기
-kubectl delete -f kubernetes/deploy.yml
-
-# 확인하기 (pods, services, deployments..)
-kubectl get all
-
-# 로그확인(-f: 실시간 옵션)
-kubectl logs <POD NAME>
-
-# 바로 재반영
-kubectl get deployment  # 확인
-kubectl rollout restart deployment/gateway  # 재반영
-```
-
-## 기술 스택
-
-- **백엔드**: FastAPI, Python 3.10
-- **데이터 분석**: NumPy, SciPy
-- **메시징**: Apache Kafka
-- **컨테이너**: Docker
-- **오케스트레이션**: Kubernetes
-- **프론트엔드**: HTML5, CSS3, JavaScript
-
-## 라이선스
+## 📄 라이선스
 
 이 프로젝트는 MIT 라이선스 하에 배포됩니다.
+
+## 📞 지원
+
+문제가 있거나 질문이 있으시면 이슈를 생성해 주세요.

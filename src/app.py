@@ -14,8 +14,13 @@ from pydantic import BaseModel
 from confluent_kafka import Producer, Consumer, KafkaException
 
 # A/B 테스트 모듈 import
-from .ab_test_manager import ab_test_manager, ProductInfo, PageVariant, TestStatus, VariantType
+from .ab_test_manager import (
+    ab_test_manager, ProductInfo, PageVariant, TestStatus, VariantType,
+    DistributionMode, TestMode, ExperimentBrief
+)
 from .page_generator import page_generator
+from .autopilot import initialize_autopilot, autopilot_scheduler
+from .dashboard import initialize_dashboard, dashboard_manager
 
 # --- 설정 (변경 없음) ---
 KAFKA_BROKER = 'localhost:9092'
@@ -57,6 +62,32 @@ class TestActionRequest(BaseModel):
     test_id: str
     action: str  # "start", "pause", "complete"
 
+class ExperimentBriefRequest(BaseModel):
+    objective: str
+    primary_metrics: List[str]
+    secondary_metrics: List[str]
+    guardrails: Dict[str, float]
+    target_categories: List[str]
+    target_channels: List[str]
+    target_devices: List[str]
+    exclude_conditions: List[str]
+    variant_count: int
+    distribution_mode: str
+    mde: float
+    min_sample_size: int
+
+class CreateTestWithBriefRequest(BaseModel):
+    test_name: str
+    product_name: str
+    product_image: str
+    product_description: str
+    price: float
+    category: str
+    tags: Optional[List[str]] = []
+    duration_days: int = 14
+    experiment_brief: ExperimentBriefRequest
+    test_mode: str = "manual"
+
 # --- Kafka Consumer ---
 def consume_messages():
     conf = {
@@ -92,7 +123,18 @@ def consume_messages():
 # --- Lifespan 이벤트 핸들러 ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # ... (기존 코드와 동일) ...
+    # A/B 테스트 시스템 초기화
+    print("Initializing A/B Test System...")
+    
+    # 자동 생성기 초기화
+    initialize_autopilot(ab_test_manager)
+    print("Autopilot initialized")
+    
+    # 대시보드 초기화
+    initialize_dashboard(ab_test_manager)
+    print("Dashboard initialized")
+    
+    # Kafka 연결 (개발 모드가 아닌 경우)
     if MODE != "development":
         print("Connecting to Kafka...")
         try:
@@ -469,6 +511,383 @@ async def generate_product_page(test_id: str, variant_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"페이지 생성 중 오류가 발생했습니다: {str(e)}")
+
+# --- 새로운 API 엔드포인트들 ---
+
+@app.post("/api/abtest/create-with-brief", summary="실험 계약서와 함께 A/B 테스트 생성")
+async def create_test_with_brief(request: CreateTestWithBriefRequest):
+    """실험 계약서와 함께 A/B 테스트 생성 - 요구사항 1번"""
+    try:
+        # ProductInfo 생성
+        product_info = ProductInfo(
+            product_id=str(uuid.uuid4()),
+            product_name=request.product_name,
+            product_image=request.product_image,
+            product_description=request.product_description,
+            price=request.price,
+            category=request.category,
+            tags=request.tags
+        )
+        
+        # ExperimentBrief 생성
+        experiment_brief = ab_test_manager.create_experiment_brief(
+            objective=request.experiment_brief.objective,
+            primary_metrics=request.experiment_brief.primary_metrics,
+            secondary_metrics=request.experiment_brief.secondary_metrics,
+            guardrails=request.experiment_brief.guardrails,
+            target_categories=request.experiment_brief.target_categories,
+            target_channels=request.experiment_brief.target_channels,
+            target_devices=request.experiment_brief.target_devices,
+            exclude_conditions=request.experiment_brief.exclude_conditions,
+            variant_count=request.experiment_brief.variant_count,
+            distribution_mode=DistributionMode(request.experiment_brief.distribution_mode),
+            mde=request.experiment_brief.mde,
+            min_sample_size=request.experiment_brief.min_sample_size
+        )
+        
+        # 변형 생성 (자동 생성기 사용)
+        from .autopilot import VariantGenerator
+        variant_generator = VariantGenerator()
+        variants = variant_generator.generate_variants(product_info, request.experiment_brief.variant_count)
+        
+        # 정책 필터 적용
+        approved_variants = []
+        for variant in variants:
+            if ab_test_manager.apply_policy_filters(variant):
+                variant.policy_approved = True
+                approved_variants.append(variant)
+        
+        if len(approved_variants) < 2:
+            raise HTTPException(status_code=400, detail="정책 필터를 통과한 변형이 부족합니다.")
+        
+        # 테스트 생성
+        test = ab_test_manager.create_test_with_brief(
+            test_name=request.test_name,
+            product_info=product_info,
+            variants=approved_variants,
+            experiment_brief=experiment_brief,
+            test_mode=TestMode(request.test_mode)
+        )
+        
+        return {
+            "status": "success",
+            "test_id": test.test_id,
+            "message": "실험 계약서와 함께 테스트가 생성되었습니다.",
+            "experiment_brief": {
+                "objective": experiment_brief.objective,
+                "primary_metrics": experiment_brief.primary_metrics,
+                "guardrails": experiment_brief.guardrails,
+                "mde": experiment_brief.mde,
+                "min_sample_size": experiment_brief.min_sample_size
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"테스트 생성 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/abtest/{test_id}/variant-bandit/{user_id}", summary="Thompson Sampling을 사용한 변형 선택")
+async def get_variant_with_bandit(test_id: str, user_id: str, session_id: str = "default"):
+    """Thompson Sampling을 사용한 변형 선택 - 요구사항 7번"""
+    try:
+        variant = ab_test_manager.get_variant_with_bandit(test_id, user_id, session_id)
+        if not variant:
+            raise HTTPException(status_code=404, detail="활성 테스트를 찾을 수 없습니다.")
+        
+        return {
+            "status": "success",
+            "variant": {
+                "variant_id": variant.variant_id,
+                "variant_type": variant.variant_type.value,
+                "title": variant.title,
+                "description": variant.description,
+                "layout_type": variant.layout_type,
+                "color_scheme": variant.color_scheme,
+                "cta_text": variant.cta_text,
+                "cta_color": variant.cta_color,
+                "cta_position": variant.cta_position,
+                "additional_features": variant.additional_features,
+                "image_style": variant.image_style,
+                "font_style": variant.font_style
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"변형 조회 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/abtest/dashboard/metrics", summary="대시보드 메트릭 조회")
+async def get_dashboard_metrics():
+    """대시보드 메트릭 조회 - 요구사항 9번"""
+    try:
+        if not dashboard_manager:
+            raise HTTPException(status_code=500, detail="대시보드가 초기화되지 않았습니다.")
+        
+        metrics = dashboard_manager.get_dashboard_metrics()
+        
+        return {
+            "status": "success",
+            "metrics": {
+                "total_tests": metrics.total_tests,
+                "active_tests": metrics.active_tests,
+                "completed_tests": metrics.completed_tests,
+                "draft_tests": metrics.draft_tests,
+                "total_impressions": metrics.total_impressions,
+                "total_conversions": metrics.total_conversions,
+                "overall_cvr": metrics.overall_cvr,
+                "total_revenue": metrics.total_revenue,
+                "autopilot_experiments": metrics.autopilot_experiments,
+                "traffic_usage": metrics.traffic_usage
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"메트릭 조회 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/abtest/dashboard/test-summaries", summary="테스트 요약 목록 조회")
+async def get_test_summaries(limit: int = 10):
+    """테스트 요약 목록 조회"""
+    try:
+        if not dashboard_manager:
+            raise HTTPException(status_code=500, detail="대시보드가 초기화되지 않았습니다.")
+        
+        summaries = dashboard_manager.get_test_summaries(limit)
+        
+        return {
+            "status": "success",
+            "summaries": [
+                {
+                    "test_id": summary.test_id,
+                    "test_name": summary.test_name,
+                    "status": summary.status,
+                    "product_name": summary.product_name,
+                    "variants_count": summary.variants_count,
+                    "impressions": summary.impressions,
+                    "clicks": summary.clicks,
+                    "conversions": summary.conversions,
+                    "cvr": summary.cvr,
+                    "revenue": summary.revenue,
+                    "created_at": summary.created_at,
+                    "duration_days": summary.duration_days,
+                    "winner": summary.winner,
+                    "alerts_count": summary.alerts_count
+                }
+                for summary in summaries
+            ]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"테스트 요약 조회 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/abtest/dashboard/real-time/{test_id}", summary="실시간 메트릭 조회")
+async def get_real_time_metrics(test_id: str):
+    """실시간 메트릭 조회 - 요구사항 9번"""
+    try:
+        if not dashboard_manager:
+            raise HTTPException(status_code=500, detail="대시보드가 초기화되지 않았습니다.")
+        
+        metrics = dashboard_manager.get_real_time_metrics(test_id)
+        
+        return {
+            "status": "success",
+            "metrics": metrics
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"실시간 메트릭 조회 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/abtest/dashboard/charts/{test_id}", summary="성과 차트 생성")
+async def get_performance_charts(test_id: str):
+    """성과 차트 생성"""
+    try:
+        if not dashboard_manager:
+            raise HTTPException(status_code=500, detail="대시보드가 초기화되지 않았습니다.")
+        
+        charts = dashboard_manager.create_performance_charts(test_id)
+        
+        return {
+            "status": "success",
+            "charts": charts
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"차트 생성 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/abtest/report/{test_id}", summary="실험 리포트 생성")
+async def generate_experiment_report(test_id: str):
+    """실험 리포트 생성 - 요구사항 10번"""
+    try:
+        if not dashboard_manager:
+            raise HTTPException(status_code=500, detail="대시보드가 초기화되지 않았습니다.")
+        
+        report = dashboard_manager.generate_experiment_report(test_id)
+        
+        return {
+            "status": "success",
+            "report": report
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"리포트 생성 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/abtest/report/{test_id}/pdf", summary="PDF 리포트 다운로드")
+async def download_report_pdf(test_id: str):
+    """PDF 리포트 다운로드"""
+    try:
+        if not dashboard_manager:
+            raise HTTPException(status_code=500, detail="대시보드가 초기화되지 않았습니다.")
+        
+        pdf_content = dashboard_manager.export_report_pdf(test_id)
+        
+        return {
+            "status": "success",
+            "pdf_content": pdf_content
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF 생성 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/abtest/guardrails/alerts", summary="가드레일 알림 조회")
+async def get_guardrail_alerts(test_id: str = None):
+    """가드레일 알림 조회 - 요구사항 6번"""
+    try:
+        alerts = ab_test_manager.get_guardrail_alerts(test_id)
+        
+        return {
+            "status": "success",
+            "alerts": alerts
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"알림 조회 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/abtest/bandit/decisions/{test_id}", summary="밴딧 의사결정 로그 조회")
+async def get_bandit_decisions(test_id: str, limit: int = 100):
+    """밴딧 의사결정 로그 조회 - 요구사항 9번"""
+    try:
+        decisions = ab_test_manager.get_bandit_decisions(test_id, limit)
+        
+        return {
+            "status": "success",
+            "decisions": decisions
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"의사결정 로그 조회 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/abtest/autopilot/status", summary="자동 생성 상태 조회")
+async def get_autopilot_status():
+    """자동 생성 상태 조회 - 요구사항 11번"""
+    try:
+        if not autopilot_scheduler:
+            raise HTTPException(status_code=500, detail="자동 생성기가 초기화되지 않았습니다.")
+        
+        status = autopilot_scheduler.get_autopilot_status()
+        
+        return {
+            "status": "success",
+            "autopilot_status": status
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"자동 생성 상태 조회 중 오류가 발생했습니다: {str(e)}")
+
+@app.post("/api/abtest/autopilot/promotion-mode", summary="프로모션 모드 설정")
+async def set_promotion_mode(enabled: bool):
+    """프로모션 모드 설정 - 요구사항 11번"""
+    try:
+        if not autopilot_scheduler:
+            raise HTTPException(status_code=500, detail="자동 생성기가 초기화되지 않았습니다.")
+        
+        autopilot_scheduler.set_promotion_mode(enabled)
+        
+        return {
+            "status": "success",
+            "message": f"프로모션 모드가 {'활성화' if enabled else '비활성화'}되었습니다."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"프로모션 모드 설정 중 오류가 발생했습니다: {str(e)}")
+
+@app.post("/api/abtest/autopilot/run-cycle", summary="자동 생성 사이클 수동 실행")
+async def run_autopilot_cycle():
+    """자동 생성 사이클 수동 실행"""
+    try:
+        if not autopilot_scheduler:
+            raise HTTPException(status_code=500, detail="자동 생성기가 초기화되지 않았습니다.")
+        
+        autopilot_scheduler.run_autopilot_cycle()
+        
+        return {
+            "status": "success",
+            "message": "자동 생성 사이클이 실행되었습니다."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"자동 생성 사이클 실행 중 오류가 발생했습니다: {str(e)}")
+
+@app.post("/api/abtest/test/{test_id}/promote-winner", summary="승자 승격")
+async def promote_winner(test_id: str, variant_id: str):
+    """승자 승격 - 요구사항 8번"""
+    try:
+        success = ab_test_manager.promote_winner(test_id, variant_id)
+        
+        if success:
+            return {
+                "status": "success",
+                "message": f"변형 {variant_id}가 승격되었습니다."
+            }
+        else:
+            raise HTTPException(status_code=400, detail="승격에 실패했습니다.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"승격 중 오류가 발생했습니다: {str(e)}")
+
+@app.post("/api/abtest/test/{test_id}/auto-rollback", summary="자동 롤백 실행")
+async def execute_auto_rollback(test_id: str):
+    """자동 롤백 실행 - 요구사항 8번"""
+    try:
+        success = ab_test_manager.auto_rollback(test_id)
+        
+        if success:
+            return {
+                "status": "success",
+                "message": "자동 롤백이 실행되었습니다."
+            }
+        else:
+            return {
+                "status": "success",
+                "message": "롤백 조건이 충족되지 않았습니다."
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"롤백 실행 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/abtest/learning/patterns", summary="학습 패턴 조회")
+async def get_learning_patterns():
+    """학습 패턴 조회 - 요구사항 10번"""
+    try:
+        if not dashboard_manager:
+            raise HTTPException(status_code=500, detail="대시보드가 초기화되지 않았습니다.")
+        
+        patterns = dashboard_manager.get_learning_patterns()
+        
+        return {
+            "status": "success",
+            "patterns": patterns
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"학습 패턴 조회 중 오류가 발생했습니다: {str(e)}")
 
 # --- 메인 실행 (미사용) ---
 if __name__ == '__main__':

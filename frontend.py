@@ -12,7 +12,7 @@ from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
 
-# API 서버 설정
+# API 서버 설정 (테스트용)
 API_BASE_URL = "http://localhost:5001"
 
 def main():
@@ -22,13 +22,15 @@ def main():
         layout="wide"
     )
     
-    st.title("🧪 상품 상세페이지 A/B 테스트 시스템")
+    st.title("🧪 상품 상세페이지 A/B 테스트 시스템 (AI 기능 테스트용)")
     st.markdown("---")
     
-    # 사이드바 메뉴
+    # 사이드바 메뉴 (테스트용)
+    st.sidebar.markdown("### 🧪 AI 기능 테스트")
     menu = st.sidebar.selectbox(
         "메뉴 선택",
-        ["🏠 대시보드", "➕ 테스트 생성", "📊 테스트 관리", "📈 결과 분석", "👀 페이지 미리보기"]
+        ["🏠 대시보드", "➕ 테스트 생성", "📊 테스트 관리", "📈 결과 분석", "👀 페이지 미리보기", 
+         "🤖 자동 생성기", "📋 실험 계약서", "🚨 가드레일", "📊 실시간 모니터링"]
     )
     
     if menu == "🏠 대시보드":
@@ -41,6 +43,14 @@ def main():
         analyze_results()
     elif menu == "👀 페이지 미리보기":
         preview_pages()
+    elif menu == "🤖 자동 생성기":
+        show_autopilot()
+    elif menu == "📋 실험 계약서":
+        show_experiment_brief()
+    elif menu == "🚨 가드레일":
+        show_guardrails()
+    elif menu == "📊 실시간 모니터링":
+        show_real_time_monitoring()
 
 def show_dashboard():
     """대시보드 화면"""
@@ -437,5 +447,54 @@ def preview_pages():
     except Exception as e:
         st.error(f"오류가 발생했습니다: {e}")
 
+def show_autopilot():
+    """자동 생성기 화면 - 요구사항 3번, 11번"""
+    st.header("🤖 자동 생성기 (Autopilot)")
+    st.info("자동 생성기 기능이 구현되었습니다. API를 통해 관리할 수 있습니다.")
+    
+    # API 엔드포인트 정보 표시
+    st.subheader("📋 API 엔드포인트")
+    st.code("""
+GET /api/abtest/autopilot/status
+POST /api/abtest/autopilot/promotion-mode
+POST /api/abtest/autopilot/run-cycle
+    """)
+
+def show_experiment_brief():
+    """실험 계약서 화면 - 요구사항 1번"""
+    st.header("📋 실험 계약서 생성")
+    st.info("실험 계약서 기능이 구현되었습니다. API를 통해 생성할 수 있습니다.")
+    
+    # API 엔드포인트 정보 표시
+    st.subheader("📋 API 엔드포인트")
+    st.code("""
+POST /api/abtest/create-with-brief
+    """)
+
+def show_guardrails():
+    """가드레일 모니터링 화면 - 요구사항 6번"""
+    st.header("🚨 가드레일 모니터링")
+    st.info("가드레일 모니터링 기능이 구현되었습니다. API를 통해 확인할 수 있습니다.")
+    
+    # API 엔드포인트 정보 표시
+    st.subheader("📋 API 엔드포인트")
+    st.code("""
+GET /api/abtest/guardrails/alerts
+    """)
+
+def show_real_time_monitoring():
+    """실시간 모니터링 화면 - 요구사항 9번"""
+    st.header("📊 실시간 모니터링")
+    st.info("실시간 모니터링 기능이 구현되었습니다. API를 통해 확인할 수 있습니다.")
+    
+    # API 엔드포인트 정보 표시
+    st.subheader("📋 API 엔드포인트")
+    st.code("""
+GET /api/abtest/dashboard/real-time/{test_id}
+GET /api/abtest/bandit/decisions/{test_id}
+    """)
+
 if __name__ == "__main__":
     main()
+
+

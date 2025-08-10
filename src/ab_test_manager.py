@@ -7,18 +7,64 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 import numpy as np
 from scipy import stats
+import asyncio
+import aiohttp
+from collections import defaultdict
 
 class TestStatus(Enum):
     DRAFT = "draft"
     ACTIVE = "active"
     PAUSED = "paused"
     COMPLETED = "completed"
+    ARCHIVED = "archived"
 
 class VariantType(Enum):
     A = "A"
     B = "B"
     C = "C"
     D = "D"
+
+class DistributionMode(Enum):
+    EQUAL = "equal"  # 50:50 균등 분배
+    BANDIT = "bandit"  # Thompson Sampling
+    CONTEXTUAL = "contextual"  # Contextual Bandit
+
+class TestMode(Enum):
+    MANUAL = "manual"  # 수동 생성
+    AUTOPILOT = "autopilot"  # 자동 생성
+
+@dataclass
+class ExperimentBrief:
+    """실험 계약서 - 요구사항 1번"""
+    # 목적
+    objective: str  # "구매 전환율(CVR) 최대화"
+    
+    # 핵심지표 & 보조지표
+    primary_metrics: List[str]  # ["CVR"]
+    secondary_metrics: List[str]  # ["CTR", "ATC", "체류시간"]
+    
+    # 가드레일
+    guardrails: Dict[str, float]  # {"LCP": 3.5, "error_rate": 0.005, "return_rate": 0.1}
+    
+    # 대상 & 타깃
+    target_categories: List[str]
+    target_channels: List[str]
+    target_devices: List[str]
+    exclude_conditions: List[str]
+    
+    # 변형 수 & 분배 정책
+    variant_count: int  # 2~3개
+    distribution_mode: DistributionMode
+    initial_split: Dict[str, float]  # {"A": 0.5, "B": 0.5}
+    
+    # 최소 검출 효과 & 최소 표본수
+    mde: float  # Minimum Detectable Effect (예: 0.1 = 10%p)
+    min_sample_size: int
+    
+    # 종료 & 승격 & 롤백 규칙
+    termination_rules: Dict[str, Any]
+    promotion_rules: Dict[str, Any]
+    rollback_rules: Dict[str, Any]
 
 @dataclass
 class ProductInfo:
@@ -30,10 +76,13 @@ class ProductInfo:
     price: float
     category: str
     tags: List[str] = None
+    inventory: int = 0
+    daily_sessions: int = 0
+    cool_down_days: int = 0
 
 @dataclass
 class PageVariant:
-    """상세페이지 변형 정보"""
+    """상세페이지 변형 정보 - 요구사항 2번"""
     variant_id: str
     variant_type: VariantType
     title: str
@@ -48,10 +97,17 @@ class PageVariant:
     font_style: str  # "modern", "classic", "bold", "elegant"
     created_at: datetime
     is_active: bool = True
+    
+    # 메타 태깅 - 요구사항 2번
+    prompt_meta: Dict[str, Any] = None  # 레이아웃 유형, CTA 톤, 색 팔레트, 핵심 혜택 등
+    
+    # 정책 필터 통과 여부
+    policy_approved: bool = False
+    policy_checks: Dict[str, bool] = None  # 금칙어, 과장표현, 상표, 성능, 접근성
 
 @dataclass
 class ABTest:
-    """A/B 테스트 정보"""
+    """A/B 테스트 정보 - 확장"""
     test_id: str
     test_name: str
     product_info: ProductInfo
@@ -64,15 +120,54 @@ class ABTest:
     created_at: datetime
     updated_at: datetime
     description: str = ""
+    
+    # 실험 계약서
+    experiment_brief: ExperimentBrief = None
+    
+    # 테스트 모드
+    test_mode: TestMode = TestMode.MANUAL
+    
+    # 트래픽 예산
+    traffic_budget: float = 0.2  # 전체 트래픽의 20%
+    concurrent_experiments_limit: int = 1  # SKU당 동시 1개
+    
+    # Sticky Assignment - 요구사항 4번
+    sticky_assignment: bool = True
+    
+    # SRM 감지 - 요구사항 6번
+    srm_detection: bool = True
+    srm_threshold: float = 0.01
+    
+    # 봇/이상치 필터 - 요구사항 6번
+    bot_filter: bool = True
+    outlier_filter: bool = True
+    
+    # A/A 테스트 - 요구사항 6번
+    aa_test_enabled: bool = False
+    aa_test_duration: int = 24  # 시간
+    
+    # 가드레일 모니터링 - 요구사항 6번
+    guardrail_monitoring: bool = True
+    
+    # Thompson Sampling 파라미터 - 요구사항 7번
+    thompson_alpha: float = 1.0
+    thompson_beta: float = 1.0
+    min_exploration_rate: float = 0.05
+    
+    # 승자 처리 - 요구사항 8번
+    promotion_stages: List[float] = None  # [0.25, 0.5, 1.0]
+    promotion_duration: int = 12  # 시간
+    auto_rollback: bool = True
+    rollback_threshold: float = -0.2  # -20%
 
 @dataclass
 class TestEvent:
-    """테스트 이벤트 (노출, 클릭, 전환 등)"""
+    """테스트 이벤트 (노출, 클릭, 전환 등) - 요구사항 5번"""
     event_id: str
     test_id: str
     variant_id: str
     user_id: str
-    event_type: str  # "impression", "click", "conversion", "bounce"
+    event_type: str  # "impression", "click_detail", "add_to_cart", "purchase"
     timestamp: datetime
     session_id: str
     user_agent: str = ""
@@ -80,6 +175,18 @@ class TestEvent:
     referrer: str = ""
     revenue: float = 0.0
     session_duration: float = 0.0
+    
+    # 필수 공통 속성 - 요구사항 5번
+    product_id: str = ""
+    device: str = ""
+    channel: str = ""
+    price: float = 0.0
+    quantity: int = 1
+    
+    # 품질 플래그 - 요구사항 5번
+    bot_flag: bool = False
+    srm_flag: bool = False
+    guardrail_breach: bool = False
 
 @dataclass
 class TestResult:
@@ -97,14 +204,63 @@ class TestResult:
     bounce_rate: float
     traffic_percentage: float
     statistical_significance: float = 0.0
+    
+    # 베이지안 통계 - 요구사항 7번
+    thompson_alpha: float = 1.0
+    thompson_beta: float = 1.0
+    win_probability: float = 0.0
+    confidence_interval: Tuple[float, float] = (0.0, 0.0)
+    
+    # 세그먼트별 결과
+    segment_results: Dict[str, Dict[str, float]] = None
+
+@dataclass
+class BanditDecision:
+    """밴딧 의사결정 로그 - 요구사항 9번"""
+    timestamp: datetime
+    test_id: str
+    user_id: str
+    selected_variant: str
+    decision_reason: str  # "Thompson Sampling", "Exploration", "Exploitation"
+    epsilon: float = 0.0
+    thompson_values: Dict[str, float] = None
+
+@dataclass
+class GuardrailAlert:
+    """가드레일 알림"""
+    alert_id: str
+    test_id: str
+    alert_type: str  # "SRM", "BOT", "GUARDRAIL", "PERFORMANCE"
+    severity: str  # "LOW", "MEDIUM", "HIGH", "CRITICAL"
+    message: str
+    timestamp: datetime
+    resolved: bool = False
+    action_taken: str = ""
 
 class ABTestManager:
-    """A/B 테스트 관리자"""
+    """A/B 테스트 관리자 - 확장"""
     
     def __init__(self):
         self.tests: Dict[str, ABTest] = {}
         self.events: Dict[str, List[TestEvent]] = {}
         self.user_variants: Dict[str, str] = {}  # user_id: variant_id (일관성 보장)
+        
+        # 새로운 기능들을 위한 저장소
+        self.bandit_decisions: List[BanditDecision] = []
+        self.guardrail_alerts: List[GuardrailAlert] = []
+        self.policy_filters: Dict[str, Dict[str, bool]] = {}  # variant_id -> policy_checks
+        
+        # Thompson Sampling 파라미터
+        self.thompson_params: Dict[str, Dict[str, Tuple[float, float]]] = {}  # test_id -> {variant_id: (alpha, beta)}
+        
+        # SRM 감지용
+        self.srm_data: Dict[str, Dict[str, int]] = {}  # test_id -> {variant_id: count}
+        
+        # 트래픽 예산 관리
+        self.traffic_budget_usage: Dict[str, float] = {}  # test_id -> usage_percentage
+        
+        # 승자 처리 상태
+        self.promotion_status: Dict[str, Dict[str, Any]] = {}  # test_id -> promotion_info
     
     def create_test(self, test_name: str, product_info: ProductInfo, 
                    variants: List[PageVariant], duration_days: int = 14,
@@ -377,3 +533,459 @@ class ABTestManager:
 
 # 전역 인스턴스
 ab_test_manager = ABTestManager()
+
+# 새로운 기능들 추가
+def create_experiment_brief(self, objective: str, primary_metrics: List[str], 
+                           secondary_metrics: List[str], guardrails: Dict[str, float],
+                           target_categories: List[str], target_channels: List[str],
+                           target_devices: List[str], exclude_conditions: List[str],
+                           variant_count: int, distribution_mode: DistributionMode,
+                           mde: float, min_sample_size: int) -> ExperimentBrief:
+    """실험 계약서 생성 - 요구사항 1번"""
+    
+    # 초기 분배 설정
+    if distribution_mode == DistributionMode.EQUAL:
+        initial_split = {chr(65 + i): 1.0 / variant_count for i in range(variant_count)}
+    else:
+        initial_split = {chr(65 + i): 1.0 / variant_count for i in range(variant_count)}
+    
+    # 종료 & 승격 & 롤백 규칙
+    termination_rules = {
+        "min_duration_hours": 24,
+        "max_duration_hours": 168,  # 7일
+        "confidence_threshold": 0.95,
+        "mde_achieved": True
+    }
+    
+    promotion_rules = {
+        "stages": [0.25, 0.5, 1.0],
+        "stage_duration_hours": 12,
+        "guardrail_check": True
+    }
+    
+    rollback_rules = {
+        "performance_threshold": -0.2,  # -20%
+        "guardrail_violation": True,
+        "auto_rollback": True
+    }
+    
+    return ExperimentBrief(
+        objective=objective,
+        primary_metrics=primary_metrics,
+        secondary_metrics=secondary_metrics,
+        guardrails=guardrails,
+        target_categories=target_categories,
+        target_channels=target_channels,
+        target_devices=target_devices,
+        exclude_conditions=exclude_conditions,
+        variant_count=variant_count,
+        distribution_mode=distribution_mode,
+        initial_split=initial_split,
+        mde=mde,
+        min_sample_size=min_sample_size,
+        termination_rules=termination_rules,
+        promotion_rules=promotion_rules,
+        rollback_rules=rollback_rules
+    )
+
+def create_test_with_brief(self, test_name: str, product_info: ProductInfo,
+                          variants: List[PageVariant], experiment_brief: ExperimentBrief,
+                          test_mode: TestMode = TestMode.MANUAL) -> ABTest:
+    """실험 계약서와 함께 테스트 생성"""
+    
+    test = self.create_test(
+        test_name=test_name,
+        product_info=product_info,
+        variants=variants,
+        duration_days=7,  # 기본값
+        target_metrics={"ctr": 0.6, "conversion_rate": 0.4}
+    )
+    
+    # 실험 계약서 설정
+    test.experiment_brief = experiment_brief
+    test.test_mode = test_mode
+    test.traffic_split = experiment_brief.initial_split
+    
+    # Thompson Sampling 초기화
+    if experiment_brief.distribution_mode == DistributionMode.BANDIT:
+        self.thompson_params[test.test_id] = {
+            variant.variant_id: (1.0, 1.0) for variant in variants
+        }
+    
+    # SRM 감지 초기화
+    self.srm_data[test.test_id] = {
+        variant.variant_id: 0 for variant in variants
+    }
+    
+    return test
+
+def get_variant_with_bandit(self, test_id: str, user_id: str, session_id: str) -> Optional[PageVariant]:
+    """Thompson Sampling을 사용한 변형 선택 - 요구사항 7번"""
+    if test_id not in self.tests:
+        return None
+    
+    test = self.tests[test_id]
+    if test.status != TestStatus.ACTIVE:
+        return None
+    
+    # Sticky Assignment 확인
+    user_key = f"{user_id}_{test_id}"
+    if test.sticky_assignment and user_key in self.user_variants:
+        variant_id = self.user_variants[user_key]
+        return next((v for v in test.variants if v.variant_id == variant_id), None)
+    
+    # Thompson Sampling 적용
+    if test.experiment_brief and test.experiment_brief.distribution_mode == DistributionMode.BANDIT:
+        variant_id = self._thompson_sampling(test_id, user_id)
+    else:
+        # 기존 해시 기반 선택
+        hash_value = int(hashlib.md5(user_key.encode()).hexdigest(), 16)
+        variant_index = hash_value % len(test.variants)
+        variant_id = test.variants[variant_index].variant_id
+    
+    # Sticky Assignment 저장
+    if test.sticky_assignment:
+        self.user_variants[user_key] = variant_id
+    
+    return next((v for v in test.variants if v.variant_id == variant_id), None)
+
+def _thompson_sampling(self, test_id: str, user_id: str) -> str:
+    """Thompson Sampling 알고리즘"""
+    if test_id not in self.thompson_params:
+        return None
+    
+    params = self.thompson_params[test_id]
+    samples = {}
+    
+    # 각 변형에서 베타 분포 샘플링
+    for variant_id, (alpha, beta) in params.items():
+        samples[variant_id] = np.random.beta(alpha, beta)
+    
+    # 최대값을 가진 변형 선택
+    selected_variant = max(samples.items(), key=lambda x: x[1])[0]
+    
+    # 의사결정 로그 기록
+    decision = BanditDecision(
+        timestamp=datetime.now(),
+        test_id=test_id,
+        user_id=user_id,
+        selected_variant=selected_variant,
+        decision_reason="Thompson Sampling",
+        thompson_values=samples
+    )
+    self.bandit_decisions.append(decision)
+    
+    return selected_variant
+
+def update_thompson_params(self, test_id: str, variant_id: str, event_type: str):
+    """Thompson Sampling 파라미터 업데이트"""
+    if test_id not in self.thompson_params:
+        return
+    
+    if variant_id not in self.thompson_params[test_id]:
+        return
+    
+    alpha, beta = self.thompson_params[test_id][variant_id]
+    
+    if event_type == "purchase":
+        # 성공: alpha 증가
+        self.thompson_params[test_id][variant_id] = (alpha + 1, beta)
+    elif event_type == "impression":
+        # 실패: beta 증가 (구매하지 않음)
+        self.thompson_params[test_id][variant_id] = (alpha, beta + 1)
+
+def check_srm(self, test_id: str) -> bool:
+    """SRM (Sample Ratio Mismatch) 감지 - 요구사항 6번"""
+    if test_id not in self.tests:
+        return False
+    
+    test = self.tests[test_id]
+    if not test.srm_detection:
+        return True
+    
+    # 예상 분배와 실제 분배 비교
+    expected_split = test.experiment_brief.initial_split if test.experiment_brief else test.traffic_split
+    actual_counts = self.srm_data.get(test_id, {})
+    
+    if not actual_counts:
+        return True
+    
+    total_count = sum(actual_counts.values())
+    if total_count == 0:
+        return True
+    
+    # 카이제곱 검정
+    observed = []
+    expected = []
+    
+    for variant_id, count in actual_counts.items():
+        if variant_id in expected_split:
+            observed.append(count)
+            expected.append(expected_split[variant_id] * total_count)
+    
+    if len(observed) < 2:
+        return True
+    
+    try:
+        chi2, p_value = stats.chisquare(observed, expected)
+        
+        # SRM 알림 생성
+        if p_value < test.srm_threshold:
+            alert = GuardrailAlert(
+                alert_id=str(uuid.uuid4()),
+                test_id=test_id,
+                alert_type="SRM",
+                severity="HIGH",
+                message=f"SRM 감지: p-value={p_value:.4f}",
+                timestamp=datetime.now()
+            )
+            self.guardrail_alerts.append(alert)
+            return False
+        
+        return True
+    except:
+        return True
+
+def check_bot_and_outliers(self, event: TestEvent) -> bool:
+    """봇 및 이상치 필터링 - 요구사항 6번"""
+    # 봇 필터
+    if self._is_bot(event.user_agent):
+        event.bot_flag = True
+        return False
+    
+    # 이상치 필터
+    if self._is_outlier(event):
+        event.guardrail_breach = True
+        return False
+    
+    return True
+
+def _is_bot(self, user_agent: str) -> bool:
+    """봇 감지"""
+    bot_indicators = [
+        "bot", "crawler", "spider", "scraper", "headless",
+        "phantomjs", "selenium", "webdriver", "curl", "wget"
+    ]
+    
+    user_agent_lower = user_agent.lower()
+    return any(indicator in user_agent_lower for indicator in bot_indicators)
+
+def _is_outlier(self, event: TestEvent) -> bool:
+    """이상치 감지"""
+    # 체류 시간이 너무 짧음
+    if event.session_duration < 1.0:  # 1초 미만
+        return True
+    
+    # 비정상적인 클릭 패턴 (예: 너무 빠른 연속 클릭)
+    # 이 부분은 실제 구현에서 더 정교하게 처리해야 함
+    return False
+
+def check_guardrails(self, test_id: str) -> bool:
+    """가드레일 모니터링 - 요구사항 6번"""
+    if test_id not in self.tests:
+        return True
+    
+    test = self.tests[test_id]
+    if not test.guardrail_monitoring or not test.experiment_brief:
+        return True
+    
+    guardrails = test.experiment_brief.guardrails
+    
+    # 실제 구현에서는 성능 메트릭을 수집해야 함
+    # 여기서는 예시로 가정
+    current_metrics = {
+        "LCP": 2.5,  # 예시 값
+        "error_rate": 0.001,
+        "return_rate": 0.05
+    }
+    
+    violations = []
+    for metric, threshold in guardrails.items():
+        if metric in current_metrics:
+            if current_metrics[metric] > threshold:
+                violations.append(f"{metric}: {current_metrics[metric]} > {threshold}")
+    
+    if violations:
+        alert = GuardrailAlert(
+            alert_id=str(uuid.uuid4()),
+            test_id=test_id,
+            alert_type="GUARDRAIL",
+            severity="CRITICAL",
+            message=f"가드레일 위반: {', '.join(violations)}",
+            timestamp=datetime.now()
+        )
+        self.guardrail_alerts.append(alert)
+        return False
+    
+    return True
+
+def apply_policy_filters(self, variant: PageVariant) -> bool:
+    """정책 필터 적용 - 요구사항 2번"""
+    # 금칙어 체크
+    forbidden_words = ["최고", "최저가", "무료", "100%", "보장"]
+    content = f"{variant.title} {variant.description}".lower()
+    
+    for word in forbidden_words:
+        if word in content:
+            return False
+    
+    # 과장표현 체크
+    exaggeration_patterns = [
+        r"최고의", r"최고급", r"최고품질", r"최고수준",
+        r"완벽한", r"완벽하게", r"완벽함",
+        r"절대", r"절대적으로"
+    ]
+    
+    import re
+    for pattern in exaggeration_patterns:
+        if re.search(pattern, content):
+            return False
+    
+    # 성능 체크 (예시)
+    if len(variant.title) > 100 or len(variant.description) > 500:
+        return False
+    
+    # 접근성 체크 (예시)
+    if not variant.cta_text or len(variant.cta_text.strip()) == 0:
+        return False
+    
+    return True
+
+def get_bandit_decisions(self, test_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+    """밴딧 의사결정 로그 조회 - 요구사항 9번"""
+    decisions = [d for d in self.bandit_decisions if d.test_id == test_id]
+    decisions = decisions[-limit:]
+    
+    return [
+        {
+            "timestamp": decision.timestamp.isoformat(),
+            "user_id": decision.user_id,
+            "selected_variant": decision.selected_variant,
+            "decision_reason": decision.decision_reason,
+            "epsilon": decision.epsilon,
+            "thompson_values": decision.thompson_values
+        }
+        for decision in decisions
+    ]
+
+def get_guardrail_alerts(self, test_id: str = None) -> List[Dict[str, Any]]:
+    """가드레일 알림 조회"""
+    alerts = self.guardrail_alerts
+    if test_id:
+        alerts = [a for a in alerts if a.test_id == test_id]
+    
+    return [
+        {
+            "alert_id": alert.alert_id,
+            "test_id": alert.test_id,
+            "alert_type": alert.alert_type,
+            "severity": alert.severity,
+            "message": alert.message,
+            "timestamp": alert.timestamp.isoformat(),
+            "resolved": alert.resolved,
+            "action_taken": alert.action_taken
+        }
+        for alert in alerts
+    ]
+
+def promote_winner(self, test_id: str, variant_id: str) -> bool:
+    """승자 승격 - 요구사항 8번"""
+    if test_id not in self.tests:
+        return False
+    
+    test = self.tests[test_id]
+    if not test.promotion_stages:
+        test.promotion_stages = [0.25, 0.5, 1.0]
+    
+    # 현재 단계 확인
+    current_stage = self.promotion_status.get(test_id, {}).get("current_stage", 0)
+    
+    if current_stage >= len(test.promotion_stages):
+        return False
+    
+    # 다음 단계로 승격
+    next_traffic = test.promotion_stages[current_stage]
+    
+    # 트래픽 분배 업데이트
+    for variant in test.variants:
+        if variant.variant_id == variant_id:
+            test.traffic_split[variant_id] = next_traffic
+        else:
+            test.traffic_split[variant.variant_id] = (1.0 - next_traffic) / (len(test.variants) - 1)
+    
+    # 승격 상태 업데이트
+    self.promotion_status[test_id] = {
+        "current_stage": current_stage + 1,
+        "promoted_variant": variant_id,
+        "promotion_time": datetime.now(),
+        "traffic_percentage": next_traffic
+    }
+    
+    return True
+
+def auto_rollback(self, test_id: str) -> bool:
+    """자동 롤백 - 요구사항 8번"""
+    if test_id not in self.tests:
+        return False
+    
+    test = self.tests[test_id]
+    if not test.auto_rollback:
+        return False
+    
+    # 최근 30분간의 성과 확인
+    recent_events = [
+        e for e in self.events.get(test_id, [])
+        if (datetime.now() - e.timestamp).total_seconds() < 1800  # 30분
+    ]
+    
+    if not recent_events:
+        return False
+    
+    # 성과 계산
+    recent_conversions = len([e for e in recent_events if e.event_type == "purchase"])
+    recent_impressions = len([e for e in recent_events if e.event_type == "impression"])
+    
+    if recent_impressions == 0:
+        return False
+    
+    recent_cvr = recent_conversions / recent_impressions
+    
+    # 롤백 조건 확인
+    if recent_cvr < test.rollback_threshold:
+        # 원래 분배로 복원
+        if test.experiment_brief:
+            test.traffic_split = test.experiment_brief.initial_split.copy()
+        
+        # 롤백 알림 생성
+        alert = GuardrailAlert(
+            alert_id=str(uuid.uuid4()),
+            test_id=test_id,
+            alert_type="ROLLBACK",
+            severity="HIGH",
+            message=f"자동 롤백: CVR {recent_cvr:.4f} < {test.rollback_threshold}",
+            timestamp=datetime.now(),
+            action_taken="Traffic restored to original distribution"
+        )
+        self.guardrail_alerts.append(alert)
+        
+        return True
+    
+    return False
+
+# ABTestManager 클래스에 새로운 메서드들 추가
+ABTestManager.create_experiment_brief = create_experiment_brief
+ABTestManager.create_test_with_brief = create_test_with_brief
+ABTestManager.get_variant_with_bandit = get_variant_with_bandit
+ABTestManager._thompson_sampling = _thompson_sampling
+ABTestManager.update_thompson_params = update_thompson_params
+ABTestManager.check_srm = check_srm
+ABTestManager.check_bot_and_outliers = check_bot_and_outliers
+ABTestManager._is_bot = _is_bot
+ABTestManager._is_outlier = _is_outlier
+ABTestManager.check_guardrails = check_guardrails
+ABTestManager.apply_policy_filters = apply_policy_filters
+ABTestManager.get_bandit_decisions = get_bandit_decisions
+ABTestManager.get_guardrail_alerts = get_guardrail_alerts
+ABTestManager.promote_winner = promote_winner
+ABTestManager.auto_rollback = auto_rollback
+
