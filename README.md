@@ -11,6 +11,7 @@
 - `/api/abtest/` 엔드포인트로 통일된 API 제공
 - `/docs`에서 완전한 API 문서 확인 가능
 - 테스트용 프론트엔드 제공
+- **새로운 기능**: 실시간 대시보드, 자동화 시스템, 향상된 분석 도구
 
 ## 🎯 주요 기능
 
@@ -68,26 +69,29 @@
 - **자동 롤백**: 승격 후 30분 이동창에서 CVR 급락(-20%↓) 시 즉시 되돌림
 - **학습 저장**: 승자 특징을 패턴 DB에 기록
 
-### 9. 대시보드/운영 UX - 요구사항 9번
+### 9. 대시보드/운영 UX - 요구사항 9번 ⭐ **NEW**
 - **실시간 타일**: 변형별 Impr/CTR/CVR/매출
 - **트렌드**: 시간대별 CVR/퍼널(노출→클릭→구매)
 - **승자 확률 P**: 베이지안 CI 시각화
 - **경고 배지**: SRM/봇/가드레일
 - **제어**: 일시정지/재개, 승자 강제, 단계적 롤아웃
 - **결정 로그**: 최근 1h 밴딧 결정 사유
+- **새로운 기능**: 실시간 알림, 성능 지표 대시보드, 자동 리포트 생성
 
-### 10. 리포트 & 인사이트 - 요구사항 10번
+### 10. 리포트 & 인사이트 - 요구사항 10번 ⭐ **ENHANCED**
 - **자동 종료 리포트**: 실험 개요, 최종 성과, 신뢰도
 - **세그먼트별 차이**: 모바일·신규 등
 - **SRM/가드레일 히스토리**: 데이터 제외율(봇)
 - **Actionables**: 구체적인 개선 제안
 - **지식화**: 승자 패턴을 변형 생성 템플릿에 반영
+- **새로운 기능**: PDF 리포트, 상세 분석 차트, ROI 계산
 
-### 11. 자동화 루프 - 요구사항 11번
+### 11. 자동화 루프 - 요구사항 11번 ⭐ **NEW**
 - **Autopilot**: 스케줄러가 대상 선정→실험 생성→시작까지 자동
 - **트래픽 예산 관리**: 동시실험 상한/쿨다운으로 과실험 방지
 - **프로모션 기간 글로벌 스위치**: 자동 실험 OFF
 - **승자 확정 시 쿨다운**: 다음 실험 자동 예약
+- **새로운 기능**: 스마트 스케줄링, 리소스 최적화, 예측 분석
 
 ### 12. 예외·엣지 케이스 핸들링 - 요구사항 12번
 - **재고 급감/가격 대변동**: 실험 자동 HOLD
@@ -216,6 +220,15 @@ docker build -t ab-test-system .
 docker run -p 5001:5001 -p 8501:8501 ab-test-system
 ```
 
+### 4. 테스트 실행 ⭐ **NEW**
+```bash
+# 전체 시스템 테스트
+python test_enhanced_system.py
+
+# 개별 모듈 테스트
+python -m pytest tests/
+```
+
 ## 📊 API 엔드포인트 (통일된 `/api/abtest/` 경로)
 
 ### 실험 계약서 관련
@@ -223,10 +236,12 @@ docker run -p 5001:5001 -p 8501:8501 ab-test-system
 - `GET /api/abtest/dashboard/metrics` - 대시보드 메트릭 조회
 - `GET /api/abtest/dashboard/test-summaries` - 테스트 요약 목록
 
-### 자동 생성기 관련
+### 자동 생성기 관련 ⭐ **ENHANCED**
 - `GET /api/abtest/autopilot/status` - 자동 생성 상태 조회
 - `POST /api/abtest/autopilot/promotion-mode` - 프로모션 모드 설정
 - `POST /api/abtest/autopilot/run-cycle` - 자동 생성 사이클 수동 실행
+- `GET /api/abtest/autopilot/schedule` - 스케줄 정보 조회
+- `POST /api/abtest/autopilot/optimize` - 리소스 최적화 실행
 
 ### 밴딧 알고리즘
 - `GET /api/abtest/{test_id}/variant-bandit/{user_id}` - Thompson Sampling 변형 선택
@@ -240,15 +255,17 @@ docker run -p 5001:5001 -p 8501:8501 ab-test-system
 - `POST /api/abtest/test/{test_id}/promote-winner` - 승자 승격
 - `POST /api/abtest/test/{test_id}/auto-rollback` - 자동 롤백 실행
 
-### 리포트
+### 리포트 ⭐ **ENHANCED**
 - `GET /api/abtest/report/{test_id}` - 실험 리포트 생성
 - `GET /api/abtest/report/{test_id}/pdf` - PDF 리포트 다운로드
 - `GET /api/abtest/learning/patterns` - 학습 패턴 조회
+- `GET /api/abtest/report/{test_id}/roi` - ROI 분석
+- `GET /api/abtest/report/{test_id}/segments` - 세그먼트별 분석
 
 ### 📖 API 문서
 서버 실행 후 `http://localhost:5001/docs`에서 완전한 API 문서를 확인할 수 있습니다.
 
-## 🏗️ 시스템 아키텍처
+## 🏗️ 시스템 아키텍처 ⭐ **UPDATED**
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
@@ -263,9 +280,15 @@ docker run -p 5001:5001 -p 8501:8501 ab-test-system
                        └─────────────────┘
                                 │
                                 ▼
+                       ┌─────────────────┐    ┌─────────────────┐
+                       │  Dashboard      │    │  Analytics      │
+                       │  Manager        │◄──►│  Engine         │
+                       └─────────────────┘    └─────────────────┘
+                                │
+                                ▼
                        ┌─────────────────┐
-                       │  Dashboard      │
-                       │  Manager        │
+                       │  Report         │
+                       │  Generator      │
                        └─────────────────┘
 ```
 
@@ -291,11 +314,13 @@ response = requests.post("http://localhost:5001/api/abtest/create-with-brief",
                         json=brief_data)
 ```
 
-### 2. 자동 생성기 상태 확인
+### 2. 자동 생성기 상태 확인 ⭐ **ENHANCED**
 ```python
 response = requests.get("http://localhost:5001/api/abtest/autopilot/status")
 status = response.json()
 print(f"활성 실험: {status['autopilot_status']['active_autopilot_experiments']}")
+print(f"스케줄 상태: {status['schedule_status']}")
+print(f"리소스 사용량: {status['resource_usage']}")
 ```
 
 ### 3. 실시간 모니터링
@@ -305,6 +330,19 @@ metrics = response.json()
 print(f"실시간 CVR: {metrics['metrics']['variant_metrics']}")
 ```
 
+### 4. 향상된 리포트 생성 ⭐ **NEW**
+```python
+# ROI 분석
+roi_response = requests.get(f"http://localhost:5001/api/abtest/report/{test_id}/roi")
+roi_data = roi_response.json()
+print(f"ROI: {roi_data['roi_percentage']}%")
+
+# 세그먼트별 분석
+segments_response = requests.get(f"http://localhost:5001/api/abtest/report/{test_id}/segments")
+segments_data = segments_response.json()
+print(f"모바일 CVR: {segments_data['mobile']['cvr']}")
+```
+
 ## 🔧 설정
 
 ### 환경 변수
@@ -312,11 +350,18 @@ print(f"실시간 CVR: {metrics['metrics']['variant_metrics']}")
 - `KAFKA_BROKER`: Kafka 브로커 주소
 - `API_BASE_URL`: API 서버 주소
 
-### 자동 생성기 설정
+### 자동 생성기 설정 ⭐ **ENHANCED**
 - `max_concurrent_experiments`: 최대 동시 실험 수 (기본값: 5)
 - `max_traffic_usage`: 최대 트래픽 사용량 (기본값: 20%)
 - `min_daily_sessions`: 최소 일일 세션 수 (기본값: 100)
 - `cool_down_days`: 쿨다운 기간 (기본값: 7일)
+- `resource_optimization`: 리소스 최적화 활성화 (기본값: true)
+- `smart_scheduling`: 스마트 스케줄링 활성화 (기본값: true)
+
+### 대시보드 설정 ⭐ **NEW**
+- `real_time_refresh_interval`: 실시간 새로고침 간격 (기본값: 30초)
+- `alert_threshold`: 알림 임계값 (기본값: 0.05)
+- `performance_monitoring`: 성능 모니터링 활성화 (기본값: true)
 
 ## 📝 체크리스트
 
@@ -336,6 +381,23 @@ print(f"실시간 CVR: {metrics['metrics']['variant_metrics']}")
 - **승자 확률 ≥95% & 최소 표본 충족?** → 단계적 승격
 - **아니면** → 지속 탐험 또는 기간 상한으로 종료
 
+## 🆕 최신 업데이트 (v2.0)
+
+### 새로운 기능들
+- ✅ **실시간 대시보드**: 성능 지표 실시간 모니터링
+- ✅ **자동화 시스템**: 스마트 스케줄링 및 리소스 최적화
+- ✅ **향상된 분석**: ROI 계산, 세그먼트별 분석
+- ✅ **PDF 리포트**: 자동 PDF 리포트 생성
+- ✅ **성능 모니터링**: 시스템 성능 실시간 추적
+- ✅ **알림 시스템**: 실시간 알림 및 경고
+- ✅ **테스트 프레임워크**: 종합적인 테스트 시스템
+
+### 개선된 기능들
+- 🔄 **API 성능**: 응답 시간 최적화
+- 🔄 **데이터 처리**: 대용량 데이터 처리 개선
+- 🔄 **사용자 경험**: 더 직관적인 인터페이스
+- 🔄 **문서화**: 상세한 API 문서 및 예시
+
 ## 🤝 기여
 
 1. Fork the repository
@@ -351,3 +413,8 @@ print(f"실시간 CVR: {metrics['metrics']['variant_metrics']}")
 ## 📞 지원
 
 문제가 있거나 질문이 있으시면 이슈를 생성해 주세요.
+
+## 🔄 버전 히스토리
+
+- **v2.0** (현재): 실시간 대시보드, 자동화 시스템, 향상된 분석 도구 추가
+- **v1.0**: 기본 A/B 테스트 시스템 구현
