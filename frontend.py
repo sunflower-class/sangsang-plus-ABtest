@@ -30,7 +30,7 @@ def main():
     menu = st.sidebar.selectbox(
         "메뉴 선택",
         ["🏠 대시보드", "➕ 테스트 생성", "📊 테스트 관리", "📈 결과 분석", "👀 페이지 미리보기", 
-         "🤖 자동 생성기", "📋 실험 계약서", "🚨 가드레일", "📊 실시간 모니터링"]
+         "🧪 A/B 테스트 시뮬레이션", "🤖 자동 생성기", "📋 실험 계약서", "🚨 가드레일", "📊 실시간 모니터링"]
     )
     
     if menu == "🏠 대시보드":
@@ -43,6 +43,8 @@ def main():
         analyze_results()
     elif menu == "👀 페이지 미리보기":
         preview_pages()
+    elif menu == "🧪 A/B 테스트 시뮬레이션":
+        show_ab_test_simulation()
     elif menu == "🤖 자동 생성기":
         show_autopilot()
     elif menu == "📋 실험 계약서":
@@ -121,6 +123,22 @@ def create_test():
     """테스트 생성 화면"""
     st.header("➕ 새로운 A/B 테스트 생성")
     
+    # 테스트 생성 성공 메시지 표시
+    if st.session_state.get('test_created', False):
+        result = st.session_state.get('test_result', {})
+        st.success(f"✅ 테스트가 성공적으로 생성되었습니다!")
+        st.info(f"테스트 ID: {result.get('test_id', 'N/A')}")
+        
+        # 테스트 시작 버튼
+        if st.button("🚀 테스트 시작하기", key="start_test_btn"):
+            start_test(result.get('test_id'))
+            # 세션 상태 초기화
+            st.session_state.test_created = False
+            st.session_state.test_result = {}
+            st.rerun()
+        
+        st.markdown("---")
+    
     with st.form("create_test_form"):
         st.subheader("📝 테스트 정보")
         
@@ -172,14 +190,11 @@ def create_test():
                     response = requests.post(f"{API_BASE_URL}/api/ab-test/create", json=test_data)
                     if response.status_code == 200:
                         result = response.json()
-                        st.success(f"✅ 테스트가 성공적으로 생성되었습니다!")
-                        st.info(f"테스트 ID: {result['test_id']}")
-                        
                         # 생성된 테스트를 세션에 저장
                         st.session_state.created_test_id = result['test_id']
-                        
-                        if st.button("테스트 시작하기"):
-                            start_test(result['test_id'])
+                        st.session_state.test_created = True
+                        st.session_state.test_result = result
+                        st.rerun()
                     else:
                         st.error(f"테스트 생성에 실패했습니다: {response.text}")
                 except Exception as e:
@@ -493,6 +508,193 @@ def show_real_time_monitoring():
 GET /api/abtest/dashboard/real-time/{test_id}
 GET /api/abtest/bandit/decisions/{test_id}
     """)
+
+def show_ab_test_simulation():
+    """A/B 테스트 시뮬레이션 화면"""
+    st.header("🧪 A/B 테스트 시뮬레이션")
+    st.info("실제 사용자 행동을 시뮬레이션하여 A/B 테스트가 제대로 작동하는지 확인할 수 있습니다.")
+    
+    try:
+        # 활성 테스트 목록 조회
+        response = requests.get(f"{API_BASE_URL}/api/ab-test/list")
+        if response.status_code == 200:
+            data = response.json()
+            tests = data["tests"]
+            
+            # 활성 테스트만 필터링
+            active_tests = [t for t in tests if t["status"] == "active"]
+            
+            if not active_tests:
+                st.warning("활성 상태인 테스트가 없습니다. 먼저 테스트를 생성하고 시작해주세요.")
+                return
+            
+            # 테스트 선택
+            test_options = {f"{t['test_name']} ({t['product_name']})": t['test_id'] for t in active_tests}
+            selected_test_name = st.selectbox("시뮬레이션할 테스트 선택", list(test_options.keys()))
+            selected_test_id = test_options[selected_test_name]
+            
+            st.markdown("---")
+            
+            # 시뮬레이션 설정
+            st.subheader("⚙️ 시뮬레이션 설정")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                user_count = st.number_input("시뮬레이션할 사용자 수", min_value=1, max_value=100, value=10)
+                impression_rate = st.slider("노출 확률 (%)", 0, 100, 80)
+            with col2:
+                click_rate = st.slider("클릭 확률 (%)", 0, 100, 15)
+                conversion_rate = st.slider("구매 확률 (%)", 0, 100, 3)
+            
+            st.markdown("---")
+            
+            # 시뮬레이션 실행
+            if st.button("🚀 시뮬레이션 시작", type="primary"):
+                with st.spinner("시뮬레이션을 실행 중입니다..."):
+                    simulate_user_behavior(selected_test_id, user_count, impression_rate, click_rate, conversion_rate)
+                
+                st.success("✅ 시뮬레이션이 완료되었습니다!")
+                st.rerun()
+            
+            st.markdown("---")
+            
+            # 실시간 결과 표시
+            st.subheader("📊 실시간 결과")
+            if st.button("🔄 결과 새로고침"):
+                st.rerun()
+            
+            # 테스트 결과 조회
+            results_response = requests.get(f"{API_BASE_URL}/api/ab-test/{selected_test_id}/results")
+            if results_response.status_code == 200:
+                results_data = results_response.json()
+                results = results_data["results"]
+                
+                # 전체 통계
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("총 노출수", results.get("total_impressions", 0))
+                with col2:
+                    st.metric("총 클릭수", results.get("total_clicks", 0))
+                with col3:
+                    st.metric("총 구매수", results.get("total_conversions", 0))
+                with col4:
+                    total_revenue = results.get("total_revenue", 0)
+                    st.metric("총 매출", f"₩{total_revenue:,}")
+                
+                # 변형별 성과
+                st.subheader("🎯 변형별 성과")
+                variants = results.get("variants", {})
+                
+                if variants:
+                    # 데이터프레임 생성
+                    variant_data = []
+                    for variant_id, variant in variants.items():
+                        variant_data.append({
+                            "변형": variant["variant_type"],
+                            "노출수": variant["impressions"],
+                            "클릭수": variant["clicks"],
+                            "구매수": variant["conversions"],
+                            "CTR (%)": round(variant["ctr"], 2),
+                            "전환율 (%)": round(variant["conversion_rate"], 2),
+                            "매출": f"₩{variant['revenue']:,}",
+                            "승률 (%)": round(variant["win_probability"] * 100, 1)
+                        })
+                    
+                    df = pd.DataFrame(variant_data)
+                    st.dataframe(df, use_container_width=True)
+                    
+                    # 차트 표시
+                    if len(variant_data) > 1:
+                        st.subheader("📈 성과 차트")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            # CTR 차트
+                            fig_ctr = px.bar(df, x="변형", y="CTR (%)", title="변형별 CTR 비교")
+                            st.plotly_chart(fig_ctr, use_container_width=True)
+                        
+                        with col2:
+                            # 전환율 차트
+                            fig_conv = px.bar(df, x="변형", y="전환율 (%)", title="변형별 전환율 비교")
+                            st.plotly_chart(fig_conv, use_container_width=True)
+                else:
+                    st.info("아직 변형 데이터가 없습니다.")
+            else:
+                st.error("테스트 결과를 불러올 수 없습니다.")
+        else:
+            st.error("테스트 목록을 불러올 수 없습니다.")
+    except Exception as e:
+        st.error(f"오류가 발생했습니다: {e}")
+
+def simulate_user_behavior(test_id, user_count, impression_rate, click_rate, conversion_rate):
+    """사용자 행동 시뮬레이션"""
+    import random
+    import time
+    
+    # 테스트 정보 조회
+    response = requests.get(f"{API_BASE_URL}/api/ab-test/{test_id}/results")
+    if response.status_code != 200:
+        st.error("테스트 정보를 불러올 수 없습니다.")
+        return
+    
+    results_data = response.json()
+    results = results_data["results"]
+    variants = results.get("variants", {})
+    
+    if not variants:
+        st.error("변형 정보를 찾을 수 없습니다.")
+        return
+    
+    variant_ids = list(variants.keys())
+    
+    # 사용자별 시뮬레이션
+    for i in range(user_count):
+        user_id = f"sim_user_{i+1}"
+        session_id = f"sim_session_{i+1}"
+        
+        # 랜덤 변형 선택 (실제 A/B 테스트 로직 사용)
+        variant_response = requests.get(f"{API_BASE_URL}/api/ab-test/{test_id}/variant/{user_id}")
+        if variant_response.status_code == 200:
+            variant_data = variant_response.json()
+            variant_id = variant_data["variant"]["variant_id"]
+        else:
+            # API 호출 실패 시 랜덤 선택
+            variant_id = random.choice(variant_ids)
+        
+        # 노출 이벤트
+        if random.randint(1, 100) <= impression_rate:
+            requests.post(f"{API_BASE_URL}/api/ab-test/event", json={
+                "test_id": test_id,
+                "variant_id": variant_id,
+                "event_type": "impression",
+                "user_id": user_id,
+                "session_id": session_id
+            })
+            
+            # 클릭 이벤트
+            if random.randint(1, 100) <= click_rate:
+                requests.post(f"{API_BASE_URL}/api/ab-test/event", json={
+                    "test_id": test_id,
+                    "variant_id": variant_id,
+                    "event_type": "click",
+                    "user_id": user_id,
+                    "session_id": session_id
+                })
+                
+                # 구매 이벤트
+                if random.randint(1, 100) <= conversion_rate:
+                    revenue = random.randint(10000, 100000)  # 랜덤 매출
+                    requests.post(f"{API_BASE_URL}/api/ab-test/event", json={
+                        "test_id": test_id,
+                        "variant_id": variant_id,
+                        "event_type": "conversion",
+                        "user_id": user_id,
+                        "session_id": session_id,
+                        "revenue": revenue
+                    })
+        
+        # API 호출 간격 조절
+        time.sleep(0.1)
 
 if __name__ == "__main__":
     main()

@@ -14,13 +14,13 @@ from pydantic import BaseModel
 from confluent_kafka import Producer, Consumer, KafkaException
 
 # A/B 테스트 모듈 import
-from .ab_test_manager import (
+from ab_test_manager import (
     ab_test_manager, ProductInfo, PageVariant, TestStatus, VariantType,
     DistributionMode, TestMode, ExperimentBrief
 )
-from .page_generator import page_generator
-from .autopilot import initialize_autopilot, autopilot_scheduler
-from .dashboard import initialize_dashboard, dashboard_manager
+from page_generator import page_generator
+from autopilot import initialize_autopilot, autopilot_scheduler
+from dashboard import initialize_dashboard, dashboard_manager
 
 # --- 설정 (변경 없음) ---
 KAFKA_BROKER = 'localhost:9092'
@@ -546,7 +546,7 @@ async def create_test_with_brief(request: CreateTestWithBriefRequest):
         )
         
         # 변형 생성 (자동 생성기 사용)
-        from .autopilot import VariantGenerator
+        from autopilot import VariantGenerator
         variant_generator = VariantGenerator()
         variants = variant_generator.generate_variants(product_info, request.experiment_brief.variant_count)
         
