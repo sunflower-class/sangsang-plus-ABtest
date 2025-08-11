@@ -480,7 +480,7 @@ def analyze_results():
                             '전환': variant_result['conversions'],
                             '통계적 유의성': variant_result.get('statistical_significance', 0)
                         })
-                        })
+                        
                     
                     df = pd.DataFrame(variant_data)
                     
@@ -597,13 +597,217 @@ POST /api/abtest/autopilot/run-cycle
 def show_experiment_brief():
     """실험 계약서 화면 - 요구사항 1번"""
     st.header("📋 실험 계약서 생성")
-    st.info("실험 계약서 기능이 구현되었습니다. API를 통해 생성할 수 있습니다.")
+    st.info("A/B 테스트를 위한 상세한 실험 계약서를 생성할 수 있습니다.")
     
-    # API 엔드포인트 정보 표시
-    st.subheader("📋 API 엔드포인트")
-    st.code("""
-POST /api/abtest/create-with-brief
-    """)
+    with st.expander("📖 실험 계약서란?", expanded=False):
+        st.markdown("""
+        **실험 계약서(Experiment Brief)**는 A/B 테스트의 성공을 위한 핵심 문서입니다:
+        
+        - 🎯 **목적**: 명확한 실험 목표 정의
+        - 📊 **지표**: 핵심/보조 성과 지표 설정
+        - 🛡️ **가드레일**: 성능/품질 기준 설정
+        - 🎯 **대상**: 테스트 대상 사용자 그룹 정의
+        - ⚖️ **분배**: 트래픽 분배 정책 설정
+        - 📈 **효과**: 최소 검출 효과 및 표본 수 설정
+        - 🔄 **규칙**: 종료/승격/롤백 자동화 규칙
+        """)
+    
+    st.markdown("---")
+    
+    # 실험 계약서 생성 폼
+    st.subheader("📝 실험 계약서 생성")
+    
+    with st.form("experiment_brief_form"):
+        # 기본 정보
+        st.markdown("#### 📋 기본 정보")
+        col1, col2 = st.columns(2)
+        with col1:
+            test_name = st.text_input("테스트명", placeholder="예: 스마트폰 CVR 최적화 테스트")
+            product_name = st.text_input("상품명", placeholder="예: 갤럭시 S24 Ultra")
+            price = st.number_input("상품 가격 (원)", min_value=0, value=1000000)
+        with col2:
+            category = st.text_input("카테고리", placeholder="예: 스마트폰")
+            duration_days = st.number_input("테스트 기간 (일)", min_value=1, max_value=30, value=14)
+            variant_count = st.selectbox("변형 수", [2, 3, 4], index=1)
+        
+        # 실험 목적
+        st.markdown("#### 🎯 실험 목적")
+        objective = st.text_area("실험 목적", placeholder="예: 구매 전환율(CVR) 최대화", height=80)
+        
+        # 성과 지표
+        st.markdown("#### 📊 성과 지표")
+        col1, col2 = st.columns(2)
+        with col1:
+            primary_metrics = st.multiselect(
+                "핵심 지표 (Primary Metrics)",
+                ["CVR", "CTR", "ATC", "매출", "체류시간"],
+                default=["CVR"]
+            )
+        with col2:
+            secondary_metrics = st.multiselect(
+                "보조 지표 (Secondary Metrics)",
+                ["CVR", "CTR", "ATC", "매출", "체류시간", "이탈률"],
+                default=["CTR", "ATC"]
+            )
+        
+        # 가드레일
+        st.markdown("#### 🛡️ 가드레일 (Guardrails)")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            lcp_threshold = st.number_input("LCP 임계값 (초)", min_value=1.0, max_value=10.0, value=3.5, step=0.1)
+        with col2:
+            error_rate_threshold = st.number_input("오류율 임계값 (%)", min_value=0.0, max_value=10.0, value=0.5, step=0.1)
+        with col3:
+            return_rate_threshold = st.number_input("반품율 임계값 (%)", min_value=0.0, max_value=50.0, value=10.0, step=0.5)
+        
+        # 대상 설정
+        st.markdown("#### 🎯 대상 설정")
+        col1, col2 = st.columns(2)
+        with col1:
+            target_categories = st.multiselect(
+                "대상 카테고리",
+                ["스마트폰", "노트북", "태블릿", "웨어러블", "가전제품", "의류", "신발", "가방"],
+                default=["스마트폰"]
+            )
+            target_channels = st.multiselect(
+                "대상 채널",
+                ["web", "mobile", "app"],
+                default=["web", "mobile"]
+            )
+        with col2:
+            target_devices = st.multiselect(
+                "대상 디바이스",
+                ["desktop", "mobile", "tablet"],
+                default=["desktop", "mobile"]
+            )
+            exclude_conditions = st.multiselect(
+                "제외 조건",
+                ["신규 사용자", "VIP 고객", "특정 지역", "특정 시간대"],
+                default=[]
+            )
+        
+        # 분배 정책
+        st.markdown("#### ⚖️ 분배 정책")
+        distribution_mode = st.selectbox(
+            "트래픽 분배 방식",
+            ["equal", "bandit", "contextual"],
+            format_func=lambda x: {
+                "equal": "균등 분배 (50:50)",
+                "bandit": "Thompson Sampling 밴딧",
+                "contextual": "Contextual Bandit"
+            }[x]
+        )
+        
+        # 통계 설정
+        st.markdown("#### 📈 통계 설정")
+        col1, col2 = st.columns(2)
+        with col1:
+            mde = st.number_input("최소 검출 효과 (MDE) (%)", min_value=1.0, max_value=50.0, value=10.0, step=0.5)
+        with col2:
+            min_sample_size = st.number_input("최소 표본 수", min_value=100, max_value=10000, value=1000, step=100)
+        
+        # 제출 버튼
+        submitted = st.form_submit_button("📋 실험 계약서 생성", type="primary")
+        
+        if submitted:
+            if not test_name or not product_name or not objective:
+                st.error("필수 항목을 모두 입력해주세요.")
+                return
+            
+            # 실험 계약서 데이터 구성
+            experiment_brief_data = {
+                "test_name": test_name,
+                "product_name": product_name,
+                "product_image": "https://example.com/product.jpg",
+                "product_description": f"{product_name} 상품입니다.",
+                "price": price,
+                "category": category,
+                "tags": [category],
+                "duration_days": duration_days,
+                "experiment_brief": {
+                    "objective": objective,
+                    "primary_metrics": primary_metrics,
+                    "secondary_metrics": secondary_metrics,
+                    "guardrails": {
+                        "LCP": lcp_threshold,
+                        "error_rate": error_rate_threshold / 100,
+                        "return_rate": return_rate_threshold / 100
+                    },
+                    "target_categories": target_categories,
+                    "target_channels": target_channels,
+                    "target_devices": target_devices,
+                    "exclude_conditions": exclude_conditions,
+                    "variant_count": variant_count,
+                    "distribution_mode": distribution_mode,
+                    "mde": mde / 100,
+                    "min_sample_size": min_sample_size
+                },
+                "test_mode": "manual"
+            }
+            
+            try:
+                # API 호출
+                response = requests.post(f"{API_BASE_URL}/api/abtest/create-with-brief", json=experiment_brief_data)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    st.success(f"✅ 실험 계약서가 성공적으로 생성되었습니다!")
+                    st.info(f"**테스트 ID**: {result['test_id']}")
+                    
+                    # 생성된 실험 계약서 요약 표시
+                    with st.expander("📋 생성된 실험 계약서 요약", expanded=True):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown(f"**테스트명**: {test_name}")
+                            st.markdown(f"**상품명**: {product_name}")
+                            st.markdown(f"**목적**: {objective}")
+                            st.markdown(f"**기간**: {duration_days}일")
+                        with col2:
+                            st.markdown(f"**변형 수**: {variant_count}개")
+                            st.markdown(f"**분배 방식**: {distribution_mode}")
+                            st.markdown(f"**최소 표본 수**: {min_sample_size:,}명")
+                            st.markdown(f"**MDE**: {mde}%")
+                    
+                    st.rerun()
+                else:
+                    st.error(f"❌ 실험 계약서 생성 실패: {response.text}")
+                    
+            except Exception as e:
+                st.error(f"❌ 오류가 발생했습니다: {e}")
+    
+    st.markdown("---")
+    
+    # 기존 실험 계약서 목록
+    st.subheader("📋 기존 실험 계약서")
+    try:
+        response = requests.get(f"{API_BASE_URL}/api/abtest/list")
+        if response.status_code == 200:
+            data = response.json()
+            tests = data["tests"]
+            
+            if tests:
+                # 실험 계약서가 있는 테스트만 필터링
+                tests_with_brief = [t for t in tests if t.get("experiment_brief")]
+                
+                if tests_with_brief:
+                    for test in tests_with_brief[-5:]:  # 최근 5개
+                        with st.expander(f"📋 {test['test_name']} ({test['product_name']})"):
+                            st.markdown(f"**상태**: {test['status']}")
+                            st.markdown(f"**생성일**: {test['created_at'][:10]}")
+                            st.markdown(f"**변형 수**: {test['variants_count']}개")
+                            
+                            if test.get("experiment_brief"):
+                                brief = test["experiment_brief"]
+                                st.markdown(f"**목적**: {brief.get('objective', 'N/A')}")
+                                st.markdown(f"**핵심 지표**: {', '.join(brief.get('primary_metrics', []))}")
+                else:
+                    st.info("아직 실험 계약서가 생성된 테스트가 없습니다.")
+            else:
+                st.info("생성된 테스트가 없습니다.")
+        else:
+            st.error("테스트 목록을 불러올 수 없습니다.")
+    except Exception as e:
+        st.error(f"오류가 발생했습니다: {e}")
 
 def show_guardrails():
     """가드레일 모니터링 화면 - 요구사항 6번"""
