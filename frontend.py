@@ -683,14 +683,13 @@ def simulate_user_behavior(test_id, user_count, impression_rate, click_rate, con
                 
                 # 구매 이벤트
                 if random.randint(1, 100) <= conversion_rate:
-                    revenue = random.randint(10000, 100000)  # 랜덤 매출
+                    # 매출은 상품가격으로 고정 (같은 제품이므로)
                     requests.post(f"{API_BASE_URL}/api/abtest/event", json={
                         "test_id": test_id,
                         "variant_id": variant_id,
                         "event_type": "conversion",
                         "user_id": user_id,
-                        "session_id": session_id,
-                        "revenue": revenue
+                        "session_id": session_id
                     })
         
         # API 호출 간격 조절

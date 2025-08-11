@@ -358,6 +358,8 @@ class ABTestManager:
         if test_id not in self.tests:
             return False
         
+        test = self.tests[test_id]
+        
         event = TestEvent(
             event_id=str(uuid.uuid4()),
             test_id=test_id,
@@ -366,6 +368,8 @@ class ABTestManager:
             event_type=event_type,
             timestamp=datetime.now(),
             session_id=session_id,
+            product_id=test.product_info.product_id,
+            price=test.product_info.price,
             **kwargs
         )
         
@@ -388,7 +392,8 @@ class ABTestManager:
             impressions = len([e for e in variant_events if e.event_type == "impression"])
             clicks = len([e for e in variant_events if e.event_type == "click"])
             conversions = len([e for e in variant_events if e.event_type == "conversion"])
-            revenue = sum(e.revenue for e in variant_events if e.event_type == "conversion")
+            # 매출 = 구매수 × 상품가격 (같은 제품이므로 가격은 동일)
+            revenue = conversions * test.product_info.price
             
             # 세션 지속시간 및 이탈률 계산
             session_durations = [e.session_duration for e in variant_events if e.session_duration > 0]

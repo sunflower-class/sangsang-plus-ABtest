@@ -411,13 +411,18 @@ async def record_test_event(request: TestEventRequest):
                 "message": "테스트를 찾을 수 없습니다. 이벤트가 기록되지 않았습니다."
             }
         
+        # 매출 계산: conversion 이벤트인 경우 상품가격으로 설정
+        calculated_revenue = 0.0
+        if request.event_type == "conversion":
+            calculated_revenue = test.product_info.price
+        
         success = ab_test_manager.record_event(
             test_id=request.test_id,
             variant_id=request.variant_id,
             user_id=request.user_id,
             event_type=request.event_type,
             session_id=request.session_id,
-            revenue=request.revenue,
+            revenue=calculated_revenue,
             session_duration=request.session_duration
         )
         

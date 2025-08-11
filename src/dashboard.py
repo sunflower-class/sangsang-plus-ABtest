@@ -73,8 +73,9 @@ class DashboardManager:
             if test.test_id in self.ab_test_manager.events:
                 events = self.ab_test_manager.events[test.test_id]
                 total_impressions += len([e for e in events if e.event_type == "impression"])
-                total_conversions += len([e for e in events if e.event_type == "purchase"])
-                total_revenue += sum(e.revenue for e in events if e.event_type == "purchase")
+                total_conversions += len([e for e in events if e.event_type == "conversion"])
+                # 매출 = 구매수 × 상품가격
+                total_revenue += len([e for e in events if e.event_type == "conversion"]) * test.product_info.price
         
         overall_cvr = (total_conversions / total_impressions * 100) if total_impressions > 0 else 0
         
@@ -105,9 +106,10 @@ class DashboardManager:
             # 이벤트 통계 계산
             events = self.ab_test_manager.events.get(test.test_id, [])
             impressions = len([e for e in events if e.event_type == "impression"])
-            clicks = len([e for e in events if e.event_type == "click_detail"])
-            conversions = len([e for e in events if e.event_type == "purchase"])
-            revenue = sum(e.revenue for e in events if e.event_type == "purchase")
+            clicks = len([e for e in events if e.event_type == "click"])
+            conversions = len([e for e in events if e.event_type == "conversion"])
+            # 매출 = 구매수 × 상품가격
+            revenue = conversions * test.product_info.price
             
             cvr = (conversions / impressions * 100) if impressions > 0 else 0
             
@@ -155,9 +157,10 @@ class DashboardManager:
             variant_events = [e for e in events if e.variant_id == variant.variant_id]
             
             impressions = len([e for e in variant_events if e.event_type == "impression"])
-            clicks = len([e for e in variant_events if e.event_type == "click_detail"])
-            conversions = len([e for e in variant_events if e.event_type == "purchase"])
-            revenue = sum(e.revenue for e in variant_events if e.event_type == "purchase")
+            clicks = len([e for e in variant_events if e.event_type == "click"])
+            conversions = len([e for e in variant_events if e.event_type == "conversion"])
+            # 매출 = 구매수 × 상품가격
+            revenue = conversions * test.product_info.price
             
             ctr = (clicks / impressions * 100) if impressions > 0 else 0
             cvr = (conversions / impressions * 100) if impressions > 0 else 0
@@ -178,9 +181,9 @@ class DashboardManager:
         
         hourly_trend = {
             "impressions": len([e for e in recent_events if e.event_type == "impression"]),
-            "clicks": len([e for e in recent_events if e.event_type == "click_detail"]),
-            "conversions": len([e for e in recent_events if e.event_type == "purchase"]),
-            "revenue": sum(e.revenue for e in recent_events if e.event_type == "purchase")
+            "clicks": len([e for e in recent_events if e.event_type == "click"]),
+            "conversions": len([e for e in recent_events if e.event_type == "conversion"]),
+            "revenue": len([e for e in recent_events if e.event_type == "conversion"]) * test.product_info.price
         }
         
         # 경고 상태
@@ -247,10 +250,10 @@ class DashboardManager:
                         mode="lines+markers"
                     ))
                 
-                if "click_detail" in variant_data.columns:
+                if "click" in variant_data.columns:
                     fig_trend.add_trace(go.Scatter(
                         x=variant_data.index,
-                        y=variant_data["click_detail"],
+                        y=variant_data["click"],
                         name=f"변형 {variant_id} - 클릭",
                         mode="lines+markers"
                     ))
@@ -269,9 +272,10 @@ class DashboardManager:
             variant_events = [e for e in events if e.variant_id == variant.variant_id]
             
             impressions = len([e for e in variant_events if e.event_type == "impression"])
-            clicks = len([e for e in variant_events if e.event_type == "click_detail"])
-            conversions = len([e for e in variant_events if e.event_type == "purchase"])
-            revenue = sum(e.revenue for e in variant_events if e.event_type == "purchase")
+            clicks = len([e for e in variant_events if e.event_type == "click"])
+            conversions = len([e for e in variant_events if e.event_type == "conversion"])
+            # 매출 = 구매수 × 상품가격
+            revenue = conversions * test.product_info.price
             
             variant_stats[variant.variant_type.value] = {
                 "impressions": impressions,
@@ -434,9 +438,9 @@ class DashboardManager:
             
             if event.event_type == "impression":
                 device_analysis[device]["impressions"] += 1
-            elif event.event_type == "click_detail":
+            elif event.event_type == "click":
                 device_analysis[device]["clicks"] += 1
-            elif event.event_type == "purchase":
+            elif event.event_type == "conversion":
                 device_analysis[device]["conversions"] += 1
         
         # CTR, CVR 계산
@@ -453,9 +457,9 @@ class DashboardManager:
             
             if event.event_type == "impression":
                 channel_analysis[channel]["impressions"] += 1
-            elif event.event_type == "click_detail":
+            elif event.event_type == "click":
                 channel_analysis[channel]["clicks"] += 1
-            elif event.event_type == "purchase":
+            elif event.event_type == "conversion":
                 channel_analysis[channel]["conversions"] += 1
         
         # CTR, CVR 계산
