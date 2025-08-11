@@ -132,12 +132,6 @@ st.markdown("""
 API_BASE_URL = "http://localhost:5001"
 
 def main():
-    st.set_page_config(
-        page_title="A/B 테스트 시스템",
-        page_icon="🧪",
-        layout="wide"
-    )
-    
     st.title("🧪 상품 상세페이지 A/B 테스트 시스템 (AI 기능 테스트용)")
     st.markdown("---")
     
@@ -462,6 +456,12 @@ def analyze_results():
                 with col4:
                     st.metric("총 수익", f"₩{results['total_revenue']:,.0f}")
                 
+                # 승자 정보 표시
+                if results.get('winner'):
+                    st.success(f"🏆 **승자: 변형 {results['winner']}**")
+                else:
+                    st.info("🤔 아직 승자가 결정되지 않았습니다.")
+                
                 # 변형별 결과 차트
                 if results['variants']:
                     st.subheader("📈 변형별 성과 비교")
@@ -469,14 +469,17 @@ def analyze_results():
                     # 데이터 준비
                     variant_data = []
                     for variant_id, variant_result in results['variants'].items():
+                        is_winner = results.get('winner') == variant_id
                         variant_data.append({
-                            '변형': variant_result['variant_type'],
+                            '변형': f"{variant_result['variant_type']}{' 🏆' if is_winner else ''}",
                             'CTR (%)': variant_result['ctr'],
                             '전환율 (%)': variant_result['conversion_rate'],
                             '수익 (원)': variant_result['revenue'],
                             '노출': variant_result['impressions'],
                             '클릭': variant_result['clicks'],
-                            '전환': variant_result['conversions']
+                            '전환': variant_result['conversions'],
+                            '통계적 유의성': variant_result.get('statistical_significance', 0)
+                        })
                         })
                     
                     df = pd.DataFrame(variant_data)

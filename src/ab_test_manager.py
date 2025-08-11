@@ -159,6 +159,7 @@ class ABTest:
     promotion_duration: int = 12  # 시간
     auto_rollback: bool = True
     rollback_threshold: float = -0.2  # -20%
+    winner_variant_id: Optional[str] = None  # 승자 변형 ID
 
 @dataclass
 class TestEvent:
@@ -322,7 +323,7 @@ class ABTestManager:
         return False
     
     def complete_test(self, test_id: str) -> bool:
-        """테스트 완료"""
+        """테스트 완료 및 승자 결정"""
         if test_id not in self.tests:
             return False
         
@@ -330,6 +331,13 @@ class ABTestManager:
         test.status = TestStatus.COMPLETED
         test.end_date = datetime.now()
         test.updated_at = datetime.now()
+        
+        # 테스트 완료 시 승자 자동 결정
+        results = self.get_test_results(test_id)
+        if results and "winner" in results:
+            # 승자 정보를 테스트에 저장
+            test.winner_variant_id = results["winner"]
+        
         return True
     
     def get_variant_for_user(self, test_id: str, user_id: str, session_id: str) -> Optional[PageVariant]:
@@ -489,14 +497,31 @@ class ABTestManager:
         if not variant_results:
             return None
         
-        # 종합 점수가 가장 높고 통계적으로 유의한 변형 선택
+        # 가장 높은 CVR을 가진 변형을 우선적으로 선택
         best_variant = None
-        best_score = -1
+        best_cvr = -1
         
         for variant_id, result in variant_results.items():
-            if result.statistical_significance < 0.05:  # p < 0.05
-                if result.statistical_significance > best_score:
-                    best_score = result.statistical_significance
+            # 최소 노출 수 확인 (통계적 신뢰성을 위해)
+            if result.impressions >= 5:  # 최소 5회 노출
+                if result.conversion_rate > best_cvr:
+                    best_cvr = result.conversion_rate
+                    best_variant = variant_id
+        
+        # CVR이 같은 경우 매출로 비교
+        if best_variant is None:
+            best_revenue = -1
+            for variant_id, result in variant_results.items():
+                if result.impressions >= 5 and result.revenue > best_revenue:
+                    best_revenue = result.revenue
+                    best_variant = variant_id
+        
+        # 여전히 결정되지 않으면 가장 많은 노출을 받은 변형 선택
+        if best_variant is None:
+            best_impressions = -1
+            for variant_id, result in variant_results.items():
+                if result.impressions > best_impressions:
+                    best_impressions = result.impressions
                     best_variant = variant_id
         
         return best_variant
