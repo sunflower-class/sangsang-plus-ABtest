@@ -403,6 +403,14 @@ async def get_test_events(test_id: str, limit: int = 100):
 async def record_test_event(request: TestEventRequest):
     """테스트 이벤트 기록 (노출, 클릭, 전환 등)"""
     try:
+        # 테스트 존재 여부 확인
+        test = ab_test_manager.tests.get(request.test_id)
+        if not test:
+            return {
+                "status": "warning",
+                "message": "테스트를 찾을 수 없습니다. 이벤트가 기록되지 않았습니다."
+            }
+        
         success = ab_test_manager.record_event(
             test_id=request.test_id,
             variant_id=request.variant_id,
@@ -413,17 +421,21 @@ async def record_test_event(request: TestEventRequest):
             session_duration=request.session_duration
         )
         
-        if not success:
-            raise HTTPException(status_code=404, detail="테스트를 찾을 수 없습니다.")
-        
-        return {
-            "status": "success",
-            "message": "이벤트가 성공적으로 기록되었습니다."
-        }
-    except HTTPException:
-        raise
+        if success:
+            return {
+                "status": "success",
+                "message": "이벤트가 성공적으로 기록되었습니다."
+            }
+        else:
+            return {
+                "status": "warning",
+                "message": "이벤트 기록에 실패했습니다. 테스트 상태를 확인해주세요."
+            }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"이벤트 기록 중 오류가 발생했습니다: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"이벤트 기록 중 오류가 발생했습니다: {str(e)}"
+        }
 
 @app.get("/api/abtest/{test_id}/variant/{user_id}", summary="사용자별 변형 조회")
 async def get_user_variant(test_id: str, user_id: str, session_id: str = "default"):
@@ -821,7 +833,10 @@ async def run_autopilot_cycle():
     """자동 생성 사이클 수동 실행"""
     try:
         if not autopilot_scheduler:
-            raise HTTPException(status_code=500, detail="자동 생성기가 초기화되지 않았습니다.")
+            return {
+                "status": "warning",
+                "message": "자동 생성기가 초기화되지 않았습니다. 시스템을 재시작해주세요."
+            }
         
         autopilot_scheduler.run_autopilot_cycle()
         
@@ -829,10 +844,11 @@ async def run_autopilot_cycle():
             "status": "success",
             "message": "자동 생성 사이클이 실행되었습니다."
         }
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"자동 생성 사이클 실행 중 오류가 발생했습니다: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"자동 생성 사이클 실행 중 오류가 발생했습니다: {str(e)}"
+        }
 
 @app.post("/api/abtest/test/{test_id}/promote-winner", summary="승자 승격")
 async def promote_winner(test_id: str, variant_id: str):
@@ -889,10 +905,10 @@ async def get_learning_patterns():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"학습 패턴 조회 중 오류가 발생했습니다: {str(e)}")
 
-# --- 메인 실행 (미사용) ---
+# --- 메인 실행 ---
 if __name__ == '__main__':
     uvicorn.run(
-        "main:app", 
+        "app:app", 
         host='0.0.0.0', 
         port=5001, 
         reload=(MODE != "kubernetes")
