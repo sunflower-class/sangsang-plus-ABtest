@@ -1,0 +1,31 @@
+[server]
+# 서버 설정
+port = 8501
+address = "0.0.0.0"
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+
+[browser]
+# 브라우저 설정
+gatherUsageStats = false
+serverAddress = "localhost"
+serverPort = 8501
+
+[theme]
+# 테마 설정
+primaryColor = "#2563eb"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f8fafc"
+textColor = "#1e293b"
+
+[client]
+# 클라이언트 설정
+showErrorDetails = false
+toolbarMode = "minimal"
+
+[runner]
+# 러너 설정
+magicEnabled = false
+installTracer = false
+fixMatplotlib = true
