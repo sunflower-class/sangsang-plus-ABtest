@@ -19,7 +19,10 @@ from ab_test_manager import (
     DistributionMode, TestMode, ExperimentBrief
 )
 from page_generator import page_generator
-from autopilot import initialize_autopilot, autopilot_scheduler
+from autopilot import initialize_autopilot
+
+# 전역 autopilot_scheduler 변수
+autopilot_scheduler = None
 from dashboard import initialize_dashboard, dashboard_manager
 
 # --- 설정 (변경 없음) ---
@@ -127,7 +130,8 @@ async def lifespan(app: FastAPI):
     print("Initializing A/B Test System...")
     
     # 자동 생성기 초기화
-    initialize_autopilot(ab_test_manager)
+    global autopilot_scheduler
+    autopilot_scheduler = initialize_autopilot(ab_test_manager)
     print("Autopilot initialized")
     
     # 대시보드 초기화

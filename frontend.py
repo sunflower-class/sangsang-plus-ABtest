@@ -140,7 +140,7 @@ def main():
     menu = st.sidebar.selectbox(
         "메뉴 선택",
         ["🏠 대시보드", "➕ 테스트 생성", "📊 테스트 관리", "📈 결과 분석", "👀 페이지 미리보기", 
-         "🧪 A/B 테스트 시뮬레이션", "🤖 자동 생성기", "📋 실험 계약서", "🚨 가드레일", "📊 실시간 모니터링"]
+         "🧪 A/B 테스트 시뮬레이션", "🤖 자동 생성기", "📋 실험 계약서", "🚨 가드레일"]
     )
     
     if menu == "🏠 대시보드":
@@ -161,8 +161,7 @@ def main():
         show_experiment_brief()
     elif menu == "🚨 가드레일":
         show_guardrails()
-    elif menu == "📊 실시간 모니터링":
-        show_real_time_monitoring()
+    # 실시간 모니터링은 가드레일 모니터링으로 통합됨
 
 def show_dashboard():
     """대시보드 화면"""
@@ -230,8 +229,9 @@ def show_dashboard():
         st.error(f"오류가 발생했습니다: {e}")
 
 def create_test():
-    """테스트 생성 화면"""
+    """테스트 생성 화면 (실험 계약서 형식)"""
     st.header("➕ 새로운 A/B 테스트 생성")
+    st.info("실험 계약서 형식으로 A/B 테스트를 생성합니다.")
     
     # 테스트 생성 성공 메시지 표시
     if st.session_state.get('test_created', False):
@@ -250,54 +250,107 @@ def create_test():
         st.markdown("---")
     
     with st.form("create_test_form"):
-        st.subheader("📝 테스트 정보")
+        st.subheader("📝 기본 정보")
         
         col1, col2 = st.columns(2)
         with col1:
-            test_name = st.text_input("테스트명", placeholder="예: 스마트폰 A/B 테스트")
+            test_name = st.text_input("테스트명", placeholder="예: 스마트폰 CVR 최적화 테스트")
             product_name = st.text_input("상품명", placeholder="예: 갤럭시 S24 Ultra")
-            product_image = st.text_input("상품 이미지 URL", placeholder="https://example.com/image.jpg")
-        
-        with col2:
             price = st.number_input("가격 (원)", min_value=0, value=1000000, step=10000)
+        with col2:
             category = st.text_input("카테고리", placeholder="예: 스마트폰")
             duration_days = st.number_input("테스트 기간 (일)", min_value=1, max_value=90, value=14)
+            variant_count = st.selectbox("변형 수", [2, 3, 4], index=1)
         
+        product_image = st.text_input("상품 이미지 URL", placeholder="https://example.com/image.jpg")
         product_description = st.text_area(
             "상품 설명", 
             placeholder="상품에 대한 자세한 설명을 입력하세요...",
             height=100
         )
         
-        st.subheader("🎯 목표 지표 설정")
+        st.subheader("🎯 실험 목적")
+        objective = st.text_area("실험 목적", placeholder="예: 구매 전환율(CVR) 최대화", height=80)
+        
+        st.subheader("📊 성과 지표")
         col1, col2 = st.columns(2)
         with col1:
-            ctr_weight = st.slider("CTR 가중치", 0.0, 1.0, 0.6, 0.1)
+            primary_metrics = st.multiselect(
+                "핵심 지표 (Primary Metrics)",
+                ["CVR", "CTR", "ATC", "매출", "체류시간"],
+                default=["CVR"]
+            )
         with col2:
-            conversion_weight = st.slider("전환율 가중치", 0.0, 1.0, 0.4, 0.1)
+            secondary_metrics = st.multiselect(
+                "보조 지표 (Secondary Metrics)",
+                ["CVR", "CTR", "ATC", "매출", "체류시간", "이탈률"],
+                default=["CTR", "ATC"]
+            )
         
-        st.info(f"총 가중치: {ctr_weight + conversion_weight:.1f}")
+        st.subheader("🛡️ 가드레일 설정")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            lcp_threshold = st.number_input("LCP 임계값 (초)", min_value=1.0, max_value=10.0, value=3.5, step=0.1)
+        with col2:
+            error_rate_threshold = st.number_input("오류율 임계값 (%)", min_value=0.0, max_value=10.0, value=0.5, step=0.1)
+        with col3:
+            return_rate_threshold = st.number_input("반품율 임계값 (%)", min_value=0.0, max_value=50.0, value=10.0, step=0.5)
         
-        submitted = st.form_submit_button("테스트 생성")
+        st.subheader("⚖️ 분배 정책")
+        distribution_mode = st.selectbox(
+            "트래픽 분배 방식",
+            ["equal", "bandit", "contextual"],
+            format_func=lambda x: {
+                "equal": "균등 분배 (50:50)",
+                "bandit": "Thompson Sampling 밴딧",
+                "contextual": "Contextual Bandit"
+            }[x]
+        )
+        
+        st.subheader("📈 통계 설정")
+        col1, col2 = st.columns(2)
+        with col1:
+            mde = st.number_input("최소 검출 효과 (MDE) (%)", min_value=1.0, max_value=50.0, value=10.0, step=0.5)
+        with col2:
+            min_sample_size = st.number_input("최소 표본 수", min_value=100, max_value=10000, value=1000, step=100)
+        
+        submitted = st.form_submit_button("📋 실험 계약서로 테스트 생성", type="primary")
         
         if submitted:
-            if test_name and product_name and product_image and product_description:
-                test_data = {
+            if test_name and product_name and objective:
+                # 실험 계약서 형식으로 데이터 구성
+                experiment_brief_data = {
                     "test_name": test_name,
                     "product_name": product_name,
                     "product_image": product_image,
                     "product_description": product_description,
                     "price": price,
                     "category": category,
+                    "tags": [category],
                     "duration_days": duration_days,
-                    "target_metrics": {
-                        "ctr": ctr_weight,
-                        "conversion_rate": conversion_weight
-                    }
+                    "experiment_brief": {
+                        "objective": objective,
+                        "primary_metrics": primary_metrics,
+                        "secondary_metrics": secondary_metrics,
+                        "guardrails": {
+                            "LCP": lcp_threshold,
+                            "error_rate": error_rate_threshold / 100,
+                            "return_rate": return_rate_threshold / 100
+                        },
+                        "target_categories": [category],
+                        "target_channels": ["web", "mobile"],
+                        "target_devices": ["desktop", "mobile"],
+                        "exclude_conditions": [],
+                        "variant_count": variant_count,
+                        "distribution_mode": distribution_mode,
+                        "mde": mde / 100,
+                        "min_sample_size": min_sample_size
+                    },
+                    "test_mode": "manual"
                 }
                 
                 try:
-                    response = requests.post(f"{API_BASE_URL}/api/abtest/create", json=test_data)
+                    response = requests.post(f"{API_BASE_URL}/api/abtest/create-with-brief", json=experiment_brief_data)
                     if response.status_code == 200:
                         result = response.json()
                         # 생성된 테스트를 세션에 저장
@@ -310,7 +363,7 @@ def create_test():
                 except Exception as e:
                     st.error(f"오류가 발생했습니다: {e}")
             else:
-                st.error("모든 필수 필드를 입력해주세요.")
+                st.error("필수 항목을 모두 입력해주세요.")
 
 def start_test(test_id):
     """테스트 시작"""
@@ -1187,17 +1240,7 @@ def show_guardrails():
     except Exception as e:
         st.error(f"오류가 발생했습니다: {e}")
 
-def show_real_time_monitoring():
-    """실시간 모니터링 화면 - 요구사항 9번"""
-    st.header("📊 실시간 모니터링")
-    st.info("실시간 모니터링 기능이 구현되었습니다. API를 통해 확인할 수 있습니다.")
-    
-    # API 엔드포인트 정보 표시
-    st.subheader("📋 API 엔드포인트")
-    st.code("""
-GET /api/abtest/dashboard/real-time/{test_id}
-GET /api/abtest/bandit/decisions/{test_id}
-    """)
+# 실시간 모니터링은 가드레일 모니터링으로 통합됨
 
 def show_ab_test_simulation():
     """A/B 테스트 시뮬레이션 화면"""
@@ -1317,7 +1360,7 @@ def show_ab_test_simulation():
         st.error(f"오류가 발생했습니다: {e}")
 
 def simulate_user_behavior(test_id, user_count, impression_rate, click_rate, conversion_rate):
-    """사용자 행동 시뮬레이션"""
+    """사용자 행동 시뮬레이션 (가드레일 지표 포함)"""
     
     # 테스트 정보 조회
     response = requests.get(f"{API_BASE_URL}/api/abtest/{test_id}/results")
@@ -1335,6 +1378,13 @@ def simulate_user_behavior(test_id, user_count, impression_rate, click_rate, con
     
     variant_ids = list(variants.keys())
     
+    # 가드레일 위반 시뮬레이션을 위한 카운터
+    guardrail_violations = {
+        "bot_traffic": 0,
+        "outlier_behavior": 0,
+        "performance_issues": 0
+    }
+    
     # 사용자별 시뮬레이션
     for i in range(user_count):
         user_id = f"sim_user_{i+1}"
@@ -1349,39 +1399,84 @@ def simulate_user_behavior(test_id, user_count, impression_rate, click_rate, con
             # API 호출 실패 시 랜덤 선택
             variant_id = random.choice(variant_ids)
         
+        # 봇 트래픽 시뮬레이션 (5% 확률)
+        is_bot = random.randint(1, 100) <= 5
+        if is_bot:
+            guardrail_violations["bot_traffic"] += 1
+            user_agent = "HeadlessChrome/91.0.4472.124"
+        else:
+            user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        
+        # 이상치 행동 시뮬레이션 (3% 확률)
+        is_outlier = random.randint(1, 100) <= 3
+        if is_outlier:
+            guardrail_violations["outlier_behavior"] += 1
+            session_duration = 0.5  # 0.5초 (이상치)
+        else:
+            session_duration = random.uniform(30, 300)  # 30초~5분
+        
+        # 성능 이슈 시뮬레이션 (2% 확률)
+        has_performance_issue = random.randint(1, 100) <= 2
+        if has_performance_issue:
+            guardrail_violations["performance_issues"] += 1
+        
         # 노출 이벤트
         if random.randint(1, 100) <= impression_rate:
-            requests.post(f"{API_BASE_URL}/api/abtest/event", json={
+            event_data = {
                 "test_id": test_id,
                 "variant_id": variant_id,
                 "event_type": "impression",
                 "user_id": user_id,
-                "session_id": session_id
-            })
+                "session_id": session_id,
+                "session_duration": session_duration
+            }
+            
+            # 봇 플래그 추가
+            if is_bot:
+                event_data["user_agent"] = user_agent
+            
+            requests.post(f"{API_BASE_URL}/api/abtest/event", json=event_data)
             
             # 클릭 이벤트
             if random.randint(1, 100) <= click_rate:
-                requests.post(f"{API_BASE_URL}/api/abtest/event", json={
+                click_event_data = {
                     "test_id": test_id,
                     "variant_id": variant_id,
                     "event_type": "click",
                     "user_id": user_id,
-                    "session_id": session_id
-                })
+                    "session_id": session_id,
+                    "session_duration": session_duration
+                }
+                
+                if is_bot:
+                    click_event_data["user_agent"] = user_agent
+                
+                requests.post(f"{API_BASE_URL}/api/abtest/event", json=click_event_data)
                 
                 # 구매 이벤트
                 if random.randint(1, 100) <= conversion_rate:
-                    # 매출은 상품가격으로 고정 (같은 제품이므로)
-                    requests.post(f"{API_BASE_URL}/api/abtest/event", json={
+                    conversion_event_data = {
                         "test_id": test_id,
                         "variant_id": variant_id,
                         "event_type": "conversion",
                         "user_id": user_id,
-                        "session_id": session_id
-                    })
+                        "session_id": session_id,
+                        "session_duration": session_duration
+                    }
+                    
+                    if is_bot:
+                        conversion_event_data["user_agent"] = user_agent
+                    
+                    requests.post(f"{API_BASE_URL}/api/abtest/event", json=conversion_event_data)
         
         # API 호출 간격 조절
         time.sleep(0.1)
+    
+    # 가드레일 위반 요약 표시
+    st.info(f"🔍 시뮬레이션 완료 - 가드레일 위반 요약:")
+    st.info(f"  - 봇 트래픽: {guardrail_violations['bot_traffic']}건")
+    st.info(f"  - 이상치 행동: {guardrail_violations['outlier_behavior']}건")
+    st.info(f"  - 성능 이슈: {guardrail_violations['performance_issues']}건")
 
 if __name__ == "__main__":
     main()

@@ -439,4 +439,5 @@ def initialize_autopilot(ab_test_manager: ABTestManager):
     # 스케줄러 시작
     autopilot_scheduler.start_scheduler()
     
+    print(f"Autopilot initialized with {len(sample_products)} product candidates")
     return autopilot_scheduler
