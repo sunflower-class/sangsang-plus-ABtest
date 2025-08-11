@@ -537,7 +537,8 @@ class ABTestManager:
                 "end_date": test.end_date.isoformat() if test.end_date else None,
                 "variants_count": len(test.variants),
                 "created_at": test.created_at.isoformat(),
-                "product_name": test.product_info.product_name
+                "product_name": test.product_info.product_name,
+                "test_mode": test.test_mode.value
             }
             for test in self.tests.values()
         ]

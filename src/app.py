@@ -339,7 +339,8 @@ async def get_ab_test_detail(test_id: str):
                     "category": test.product_info.category
                 },
                 "variants_count": len(test.variants),
-                "target_metrics": test.target_metrics
+                "target_metrics": test.target_metrics,
+                "test_mode": test.test_mode.value
             },
             "results": results
         }
