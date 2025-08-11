@@ -584,14 +584,181 @@ def preview_pages():
 def show_autopilot():
     """자동 생성기 화면 - 요구사항 3번, 11번"""
     st.header("🤖 자동 생성기 (Autopilot)")
-    st.info("자동 생성기 기능이 구현되었습니다. API를 통해 관리할 수 있습니다.")
+    st.info("AI가 자동으로 A/B 테스트를 생성하고 관리하는 시스템입니다.")
     
-    # API 엔드포인트 정보 표시
-    st.subheader("📋 API 엔드포인트")
-    st.code("""
-GET /api/abtest/autopilot/status
-POST /api/abtest/autopilot/promotion-mode
-POST /api/abtest/autopilot/run-cycle
+    with st.expander("📖 Autopilot이란?", expanded=False):
+        st.markdown("""
+        **Autopilot**은 AI 기반 자동 A/B 테스트 생성 및 관리 시스템입니다:
+        
+        - 🤖 **자동 후보 선별**: 트래픽, 재고, 쿨다운 조건을 고려한 상품 자동 선별
+        - 🎯 **스마트 스케줄링**: 매일/매주 자동으로 실험 생성 및 관리
+        - ⚖️ **트래픽 예산 관리**: 동시 실험 상한 및 쿨다운으로 과실험 방지
+        - 🛡️ **프로모션 모드**: 프로모션 기간 중 자동 실험 비활성화
+        - 📊 **성과 기반 최적화**: 승자 패턴을 학습하여 다음 실험에 반영
+        """)
+    
+    st.markdown("---")
+    
+    # Autopilot 상태 조회
+    st.subheader("📊 Autopilot 상태")
+    
+    try:
+        status_response = requests.get(f"{API_BASE_URL}/api/abtest/autopilot/status")
+        if status_response.status_code == 200:
+            status_data = status_response.json()
+            autopilot_status = status_data["autopilot_status"]
+            
+            # 상태 정보 표시
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("활성화 상태", "🟢 활성" if autopilot_status["enabled"] else "🔴 비활성")
+            with col2:
+                st.metric("프로모션 모드", "🟡 활성" if autopilot_status["promotion_mode"] else "🟢 비활성")
+            with col3:
+                st.metric("활성 자동 실험", autopilot_status["active_autopilot_experiments"])
+            with col4:
+                st.metric("후보 상품 수", autopilot_status["candidate_count"])
+            
+            # 상세 정보
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("#### 📈 트래픽 사용량")
+                traffic_usage = autopilot_status["total_traffic_usage"]
+                max_traffic = autopilot_status["max_traffic_usage"]
+                st.progress(traffic_usage / max_traffic)
+                st.caption(f"현재: {traffic_usage:.1%} / 최대: {max_traffic:.1%}")
+                
+                st.markdown("#### ⚙️ 설정 정보")
+                st.markdown(f"**최대 동시 실험**: {autopilot_status['max_concurrent_experiments']}개")
+                if autopilot_status.get("next_run"):
+                    st.markdown(f"**다음 실행**: {autopilot_status['next_run'][:19]}")
+            
+            with col2:
+                st.markdown("#### 🎯 실험 생성 조건")
+                st.markdown("""
+                - **최소 일일 세션**: 100회 이상
+                - **최소 재고**: 10개 이상  
+                - **쿨다운 기간**: 7일 이상
+                - **트래픽 예산**: 전체의 20% 이하
+                - **동시 실험**: 최대 5개
+                """)
+        else:
+            st.error("Autopilot 상태를 불러올 수 없습니다.")
+    except Exception as e:
+        st.error(f"오류가 발생했습니다: {e}")
+    
+    st.markdown("---")
+    
+    # Autopilot 제어
+    st.subheader("🎮 Autopilot 제어")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("🔄 상태 새로고침", type="secondary"):
+            st.rerun()
+    
+    with col2:
+        if st.button("🚀 수동 사이클 실행", type="primary"):
+            try:
+                response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/run-cycle")
+                if response.status_code == 200:
+                    result = response.json()
+                    st.success(result["message"])
+                else:
+                    st.error("수동 사이클 실행에 실패했습니다.")
+            except Exception as e:
+                st.error(f"오류가 발생했습니다: {e}")
+    
+    with col3:
+        # 프로모션 모드 토글
+        try:
+            status_response = requests.get(f"{API_BASE_URL}/api/abtest/autopilot/status")
+            if status_response.status_code == 200:
+                status_data = status_response.json()
+                current_promotion_mode = status_data["autopilot_status"]["promotion_mode"]
+                
+                if current_promotion_mode:
+                    if st.button("🟢 프로모션 모드 해제", type="secondary"):
+                        try:
+                            response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/promotion-mode", params={"enabled": False})
+                            if response.status_code == 200:
+                                st.success("프로모션 모드가 해제되었습니다.")
+                                st.rerun()
+                            else:
+                                st.error("프로모션 모드 해제에 실패했습니다.")
+                        except Exception as e:
+                            st.error(f"오류가 발생했습니다: {e}")
+                else:
+                    if st.button("🟡 프로모션 모드 활성화", type="secondary"):
+                        try:
+                            response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/promotion-mode", params={"enabled": True})
+                            if response.status_code == 200:
+                                st.success("프로모션 모드가 활성화되었습니다.")
+                                st.rerun()
+                            else:
+                                st.error("프로모션 모드 활성화에 실패했습니다.")
+                        except Exception as e:
+                            st.error(f"오류가 발생했습니다: {e}")
+        except Exception as e:
+            st.error(f"상태 조회 오류: {e}")
+    
+    st.markdown("---")
+    
+    # 자동 생성된 실험 목록
+    st.subheader("🤖 자동 생성된 실험")
+    
+    try:
+        response = requests.get(f"{API_BASE_URL}/api/abtest/list")
+        if response.status_code == 200:
+            data = response.json()
+            tests = data["tests"]
+            
+            # 자동 생성된 실험만 필터링
+            autopilot_tests = [t for t in tests if t.get("test_mode") == "autopilot"]
+            
+            if autopilot_tests:
+                for test in autopilot_tests[-5:]:  # 최근 5개
+                    with st.expander(f"🤖 {test['test_name']} ({test['product_name']})"):
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.markdown(f"**상태**: {test['status']}")
+                            st.markdown(f"**생성일**: {test['created_at'][:10]}")
+                        with col2:
+                            st.markdown(f"**변형 수**: {test['variants_count']}개")
+                            st.markdown(f"**테스트 모드**: {test.get('test_mode', 'manual')}")
+                        with col3:
+                            if test["status"] == "active":
+                                if st.button(f"결과 보기", key=f"autopilot_view_{test['test_id']}"):
+                                    st.session_state.selected_test = test['test_id']
+                                    st.rerun()
+            else:
+                st.info("아직 자동 생성된 실험이 없습니다.")
+        else:
+            st.error("테스트 목록을 불러올 수 없습니다.")
+    except Exception as e:
+        st.error(f"오류가 발생했습니다: {e}")
+    
+    st.markdown("---")
+    
+    # Autopilot 설정 정보
+    st.subheader("⚙️ Autopilot 설정")
+    
+    st.markdown("""
+    #### 📅 스케줄 설정
+    - **매일 오전 2시**: 자동 실험 생성 사이클 실행
+    - **매주 월요일 오전 9시**: 주간 실험 생성 사이클 실행
+    
+    #### 🎯 후보 선별 기준
+    - **트래픽**: 일일 세션 100회 이상
+    - **재고**: 10개 이상 보유
+    - **쿨다운**: 마지막 실험 후 7일 이상 경과
+    - **우선순위**: 트래픽, 재고, 카테고리별 점수 계산
+    
+    #### ⚖️ 리소스 관리
+    - **트래픽 예산**: 전체 트래픽의 20% 이하
+    - **동시 실험**: 최대 5개 동시 실행
+    - **SKU당 제한**: 동시 1개 실험만 허용
     """)
 
 def show_experiment_brief():
