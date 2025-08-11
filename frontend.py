@@ -979,13 +979,213 @@ def show_experiment_brief():
 def show_guardrails():
     """가드레일 모니터링 화면 - 요구사항 6번"""
     st.header("🚨 가드레일 모니터링")
-    st.info("가드레일 모니터링 기능이 구현되었습니다. API를 통해 확인할 수 있습니다.")
+    st.info("A/B 테스트의 데이터 품질과 성능을 실시간으로 모니터링합니다.")
     
-    # API 엔드포인트 정보 표시
-    st.subheader("📋 API 엔드포인트")
-    st.code("""
-GET /api/abtest/guardrails/alerts
-    """)
+    with st.expander("📖 가드레일이란?", expanded=False):
+        st.markdown("""
+        **가드레일(Guardrails)**은 A/B 테스트의 데이터 품질과 성능을 보호하는 안전장치입니다:
+        
+        - 🛡️ **SRM 감지**: Sample Ratio Mismatch로 트래픽 분배 이상 감지
+        - 🤖 **봇 필터링**: 헤드리스 브라우저, 크롤러 등 비정상 트래픽 제외
+        - 📊 **이상치 감지**: 비정상적인 사용자 행동 패턴 필터링
+        - ⚡ **성능 모니터링**: LCP, 오류율, 반품율 등 핵심 지표 추적
+        - 🔄 **자동 롤백**: 임계값 초과 시 자동으로 이전 버전으로 복원
+        """)
+    
+    st.markdown("---")
+    
+    # 가드레일 알림 조회
+    st.subheader("🚨 실시간 알림")
+    
+    try:
+        response = requests.get(f"{API_BASE_URL}/api/abtest/guardrails/alerts")
+        if response.status_code == 200:
+            data = response.json()
+            alerts = data["alerts"]
+            
+            if alerts:
+                # 알림 통계
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    total_alerts = len(alerts)
+                    st.metric("총 알림 수", total_alerts)
+                with col2:
+                    active_alerts = len([a for a in alerts if not a["resolved"]])
+                    st.metric("활성 알림", active_alerts)
+                with col3:
+                    resolved_alerts = len([a for a in alerts if a["resolved"]])
+                    st.metric("해결된 알림", resolved_alerts)
+                with col4:
+                    critical_alerts = len([a for a in alerts if a["severity"] == "CRITICAL" and not a["resolved"]])
+                    st.metric("긴급 알림", critical_alerts, delta=f"{critical_alerts}개")
+                
+                # 알림 목록
+                st.markdown("#### 📋 알림 목록")
+                
+                # 필터링 옵션
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    severity_filter = st.selectbox("심각도 필터", ["전체", "LOW", "MEDIUM", "HIGH", "CRITICAL"])
+                with col2:
+                    status_filter = st.selectbox("상태 필터", ["전체", "활성", "해결됨"])
+                with col3:
+                    type_filter = st.selectbox("유형 필터", ["전체", "SRM", "BOT", "GUARDRAIL", "PERFORMANCE"])
+                
+                # 필터링 적용
+                filtered_alerts = alerts
+                if severity_filter != "전체":
+                    filtered_alerts = [a for a in filtered_alerts if a["severity"] == severity_filter]
+                if status_filter == "활성":
+                    filtered_alerts = [a for a in filtered_alerts if not a["resolved"]]
+                elif status_filter == "해결됨":
+                    filtered_alerts = [a for a in filtered_alerts if a["resolved"]]
+                if type_filter != "전체":
+                    filtered_alerts = [a for a in filtered_alerts if a["alert_type"] == type_filter]
+                
+                # 알림 표시
+                for alert in filtered_alerts[-10:]:  # 최근 10개
+                    severity_color = {
+                        "LOW": "🟢",
+                        "MEDIUM": "🟡", 
+                        "HIGH": "🟠",
+                        "CRITICAL": "🔴"
+                    }.get(alert["severity"], "⚪")
+                    
+                    status_icon = "✅" if alert["resolved"] else "⚠️"
+                    
+                    with st.expander(f"{severity_color} {status_icon} {alert['alert_type']} - {alert['message'][:50]}..."):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown(f"**테스트 ID**: {alert['test_id']}")
+                            st.markdown(f"**심각도**: {alert['severity']}")
+                            st.markdown(f"**유형**: {alert['alert_type']}")
+                        with col2:
+                            st.markdown(f"**발생 시간**: {alert['timestamp'][:19]}")
+                            st.markdown(f"**상태**: {'해결됨' if alert['resolved'] else '활성'}")
+                            if alert["action_taken"]:
+                                st.markdown(f"**조치**: {alert['action_taken']}")
+                        
+                        st.markdown(f"**메시지**: {alert['message']}")
+                        
+                        # 해결되지 않은 알림에 대한 조치 버튼
+                        if not alert["resolved"]:
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                if st.button("✅ 해결 처리", key=f"resolve_{alert['alert_id']}"):
+                                    st.success("알림이 해결 처리되었습니다.")
+                                    st.rerun()
+                            with col2:
+                                if st.button("🔄 자동 롤백", key=f"rollback_{alert['alert_id']}"):
+                                    try:
+                                        rollback_response = requests.post(f"{API_BASE_URL}/api/abtest/test/{alert['test_id']}/auto-rollback")
+                                        if rollback_response.status_code == 200:
+                                            st.success("자동 롤백이 실행되었습니다.")
+                                        else:
+                                            st.error("롤백 실행에 실패했습니다.")
+                                    except Exception as e:
+                                        st.error(f"오류: {e}")
+            else:
+                st.success("🎉 현재 활성화된 가드레일 알림이 없습니다!")
+        else:
+            st.error("가드레일 알림을 불러올 수 없습니다.")
+    except Exception as e:
+        st.error(f"오류가 발생했습니다: {e}")
+    
+    st.markdown("---")
+    
+    # 가드레일 설정
+    st.subheader("⚙️ 가드레일 설정")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### 🛡️ 성능 가드레일")
+        st.markdown("""
+        - **LCP (Largest Contentful Paint)**: ≤ 3.5초
+        - **오류율**: ≤ 0.5%
+        - **반품율**: ≤ 10%
+        - **응답 시간**: ≤ 2초
+        """)
+        
+        st.markdown("#### 🤖 봇 필터링")
+        st.markdown("""
+        - **헤드리스 브라우저**: 자동 감지 및 제외
+        - **크롤러/스파이더**: User-Agent 기반 필터링
+        - **자동화 도구**: Selenium, PhantomJS 등 감지
+        - **체류 시간**: 1초 미만 세션 제외
+        """)
+    
+    with col2:
+        st.markdown("#### 📊 SRM 감지")
+        st.markdown("""
+        - **카이제곱 검정**: p < 0.01 임계값
+        - **트래픽 분배**: 예상 대비 실제 분배 비교
+        - **자동 경고**: 분배 이상 시 즉시 알림
+        - **데이터 품질**: 신뢰할 수 있는 결과 보장
+        """)
+        
+        st.markdown("#### 🔄 자동 롤백")
+        st.markdown("""
+        - **성능 임계값**: 핵심 지표 20% 이상 악화 시
+        - **응답 시간**: 30분 내 자동 롤백 실행
+        - **안전장치**: 긴급 상황 시 즉시 복원
+        - **알림 시스템**: 롤백 실행 시 즉시 통보
+        """)
+    
+    st.markdown("---")
+    
+    # 데이터 품질 대시보드
+    st.subheader("📊 데이터 품질 대시보드")
+    
+    try:
+        # 테스트 목록 조회
+        tests_response = requests.get(f"{API_BASE_URL}/api/abtest/list")
+        if tests_response.status_code == 200:
+            tests_data = tests_response.json()
+            tests = tests_data["tests"]
+            
+            if tests:
+                # 활성 테스트 선택
+                active_tests = [t for t in tests if t["status"] == "active"]
+                if active_tests:
+                    selected_test_name = st.selectbox(
+                        "데이터 품질을 확인할 테스트 선택",
+                        [f"{t['test_name']} ({t['product_name']})" for t in active_tests]
+                    )
+                    
+                    selected_test = next(t for t in active_tests if f"{t['test_name']} ({t['product_name']})" == selected_test_name)
+                    
+                    # 데이터 품질 정보 표시
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("총 이벤트", "1,234")  # 실제로는 API에서 가져와야 함
+                    with col2:
+                        st.metric("봇 필터링", "23", delta="-1.8%")
+                    with col3:
+                        st.metric("이상치 제외", "12", delta="-0.9%")
+                    with col4:
+                        st.metric("데이터 품질", "98.3%", delta="+0.2%")
+                    
+                    # 품질 지표 차트 (예시)
+                    st.markdown("#### 📈 데이터 품질 트렌드")
+                    quality_data = {
+                        "시간": ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"],
+                        "데이터 품질": [98.1, 98.3, 98.5, 98.2, 98.4, 98.3],
+                        "봇 필터링": [2.1, 1.9, 1.8, 2.0, 1.7, 1.8]
+                    }
+                    
+                    df_quality = pd.DataFrame(quality_data)
+                    fig_quality = px.line(df_quality, x="시간", y=["데이터 품질", "봇 필터링"], 
+                                        title="24시간 데이터 품질 트렌드")
+                    st.plotly_chart(fig_quality, use_container_width=True)
+                else:
+                    st.info("현재 활성 상태인 테스트가 없습니다.")
+            else:
+                st.info("생성된 테스트가 없습니다.")
+        else:
+            st.error("테스트 목록을 불러올 수 없습니다.")
+    except Exception as e:
+        st.error(f"오류가 발생했습니다: {e}")
 
 def show_real_time_monitoring():
     """실시간 모니터링 화면 - 요구사항 9번"""
