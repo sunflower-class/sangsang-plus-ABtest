@@ -188,6 +188,10 @@ class ABTest:
     max_cycles: int = 5  # 최대 사이클 수
     previous_winner_variant_id: Optional[str] = None  # 이전 사이클 승자
     cycle_completion_date: Optional[datetime] = None  # 사이클 완료일
+    
+    # 추가 속성들
+    winner: Optional[str] = None  # 승자 변형 ID
+    duration_days: int = 14  # 테스트 기간 (일)
 
 @dataclass
 class TestEvent:
@@ -1020,6 +1024,38 @@ class ABTestManager:
             for event in events
         ]
 
+def get_variant_stats(self, test_id: str, variant_id: str) -> Dict[str, Any]:
+    """변형별 통계 조회"""
+    if test_id not in self.tests or test_id not in self.events:
+        return {
+            "impressions": 0,
+            "clicks": 0,
+            "conversions": 0,
+            "ctr": 0.0,
+            "cvr": 0.0,
+            "revenue": 0.0
+        }
+    
+    events = self.events[test_id]
+    variant_events = [e for e in events if e.variant_id == variant_id]
+    
+    impressions = len([e for e in variant_events if e.event_type == "impression"])
+    clicks = len([e for e in variant_events if e.event_type == "click"])
+    conversions = len([e for e in variant_events if e.event_type == "conversion"])
+    
+    ctr = (clicks / impressions * 100) if impressions > 0 else 0.0
+    cvr = (conversions / impressions * 100) if impressions > 0 else 0.0
+    revenue = conversions * self.tests[test_id].product_info.price
+    
+    return {
+        "impressions": impressions,
+        "clicks": clicks,
+        "conversions": conversions,
+        "ctr": ctr,
+        "cvr": cvr,
+        "revenue": revenue
+    }
+
 # 전역 인스턴스
 ab_test_manager = ABTestManager()
 
@@ -1477,4 +1513,5 @@ ABTestManager.get_bandit_decisions = get_bandit_decisions
 ABTestManager.get_guardrail_alerts = get_guardrail_alerts
 ABTestManager.promote_winner = promote_winner
 ABTestManager.auto_rollback = auto_rollback
+ABTestManager.get_variant_stats = get_variant_stats
 

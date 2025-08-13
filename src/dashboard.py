@@ -361,6 +361,227 @@ class DashboardManager:
                 "manual_decision": self.create_manual_decision_chart("sample") if self.get_manual_decision_tests() else None
             }
         }
+    
+    def get_learning_patterns(self) -> Dict[str, Any]:
+        """학습 패턴 조회 - 요구사항 10번"""
+        try:
+            patterns = {
+                "high_performing_variants": [],
+                "low_performing_variants": [],
+                "category_performance": {},
+                "time_based_patterns": {},
+                "user_segment_insights": {}
+            }
+            
+            # 고성능 변형 패턴 분석
+            for test in self.ab_test_manager.tests.values():
+                if test.status == TestStatus.COMPLETED and test.winner:
+                    winner_variant = next((v for v in test.variants if v.variant_id == test.winner), None)
+                    if winner_variant:
+                        patterns["high_performing_variants"].append({
+                            "test_id": test.test_id,
+                            "variant_id": test.winner,
+                            "variant_type": winner_variant.variant_type.value,
+                            "layout_type": winner_variant.layout_type,
+                            "color_scheme": winner_variant.color_scheme,
+                            "cta_position": winner_variant.cta_position,
+                            "product_category": test.product_info.category
+                        })
+            
+            # 카테고리별 성과 분석
+            category_stats = {}
+            for test in self.ab_test_manager.tests.values():
+                category = test.product_info.category
+                if category not in category_stats:
+                    category_stats[category] = {"tests": 0, "winners": 0}
+                
+                category_stats[category]["tests"] += 1
+                if test.winner:
+                    category_stats[category]["winners"] += 1
+            
+            patterns["category_performance"] = category_stats
+            
+            return patterns
+            
+        except Exception as e:
+            raise Exception(f"학습 패턴 분석 중 오류: {str(e)}")
+    
+    def generate_experiment_report(self, test_id: str) -> Dict[str, Any]:
+        """실험 리포트 생성 - 요구사항 10번"""
+        try:
+            test = self.ab_test_manager.tests.get(test_id)
+            if not test:
+                raise Exception("테스트를 찾을 수 없습니다.")
+            
+            # 기본 정보
+            report = {
+                "test_id": test_id,
+                "test_name": test.test_name,
+                "product_name": test.product_info.product_name,
+                "status": test.status.value,
+                "created_at": test.created_at.isoformat(),
+                "start_date": test.start_date.isoformat() if test.start_date else None,
+                "end_date": test.end_date.isoformat() if test.end_date else None,
+                "duration_days": test.duration_days,
+                "test_mode": test.test_mode.value,
+                "winner": test.winner,
+                "variants": [],
+                "metrics": {},
+                "insights": [],
+                "recommendations": []
+            }
+            
+            # 변형 정보
+            for variant in test.variants:
+                variant_stats = self.ab_test_manager.get_variant_stats(test_id, variant.variant_id)
+                report["variants"].append({
+                    "variant_id": variant.variant_id,
+                    "variant_type": variant.variant_type.value,
+                    "title": variant.title,
+                    "layout_type": variant.layout_type,
+                    "color_scheme": variant.color_scheme,
+                    "cta_text": variant.cta_text,
+                    "cta_position": variant.cta_position,
+                    "stats": variant_stats
+                })
+            
+            # 전체 메트릭
+            if test_id in self.ab_test_manager.events:
+                events = self.ab_test_manager.events[test_id]
+                total_impressions = len([e for e in events if e.event_type == "impression"])
+                total_clicks = len([e for e in events if e.event_type == "click"])
+                total_conversions = len([e for e in events if e.event_type == "conversion"])
+                
+                report["metrics"] = {
+                    "total_impressions": total_impressions,
+                    "total_clicks": total_clicks,
+                    "total_conversions": total_conversions,
+                    "overall_ctr": (total_clicks / total_impressions * 100) if total_impressions > 0 else 0,
+                    "overall_cvr": (total_conversions / total_impressions * 100) if total_impressions > 0 else 0,
+                    "total_revenue": total_conversions * test.product_info.price
+                }
+            
+            # 인사이트 생성
+            if test.winner:
+                winner_variant = next((v for v in test.variants if v.variant_id == test.winner), None)
+                if winner_variant:
+                    report["insights"].append(f"승자 변형: {winner_variant.variant_type.value} 레이아웃이 가장 높은 성과를 보였습니다.")
+                    report["insights"].append(f"CTA 위치: {winner_variant.cta_position}이 효과적이었습니다.")
+                    report["insights"].append(f"색상 스키마: {winner_variant.color_scheme}이 사용자에게 더 매력적이었습니다.")
+            
+            # 권장사항
+            if test.winner:
+                report["recommendations"].append("승자 변형을 프로덕션에 적용하세요.")
+                report["recommendations"].append("유사한 상품에 동일한 패턴을 적용해보세요.")
+                report["recommendations"].append("장기 모니터링을 통해 지속적인 성과를 확인하세요.")
+            
+            return report
+            
+        except Exception as e:
+            raise Exception(f"리포트 생성 중 오류: {str(e)}")
+    
+    def export_report_pdf(self, test_id: str) -> str:
+        """PDF 리포트 다운로드"""
+        try:
+            report = self.generate_experiment_report(test_id)
+            
+            # 간단한 HTML 형태로 변환 (실제로는 PDF 라이브러리 사용)
+            html_content = f"""
+            <html>
+            <head>
+                <title>실험 리포트 - {report['test_name']}</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                    .header {{ background-color: #f0f0f0; padding: 10px; margin-bottom: 20px; }}
+                    .section {{ margin-bottom: 20px; }}
+                    .metric {{ display: inline-block; margin: 10px; padding: 10px; background-color: #e8f4fd; }}
+                    table {{ border-collapse: collapse; width: 100%; }}
+                    th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                    th {{ background-color: #f2f2f2; }}
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>실험 리포트</h1>
+                    <p><strong>테스트명:</strong> {report['test_name']}</p>
+                    <p><strong>상품명:</strong> {report['product_name']}</p>
+                    <p><strong>상태:</strong> {report['status']}</p>
+                </div>
+                
+                <div class="section">
+                    <h2>메트릭 요약</h2>
+                    <div class="metric">총 노출: {report['metrics'].get('total_impressions', 0)}</div>
+                    <div class="metric">총 클릭: {report['metrics'].get('total_clicks', 0)}</div>
+                    <div class="metric">총 전환: {report['metrics'].get('total_conversions', 0)}</div>
+                    <div class="metric">전체 CTR: {report['metrics'].get('overall_ctr', 0):.2f}%</div>
+                    <div class="metric">전체 CVR: {report['metrics'].get('overall_cvr', 0):.2f}%</div>
+                </div>
+                
+                <div class="section">
+                    <h2>변형 성과</h2>
+                    <table>
+                        <tr>
+                            <th>변형 ID</th>
+                            <th>타입</th>
+                            <th>레이아웃</th>
+                            <th>노출</th>
+                            <th>클릭</th>
+                            <th>전환</th>
+                            <th>CTR</th>
+                            <th>CVR</th>
+                        </tr>
+            """
+            
+            for variant in report['variants']:
+                stats = variant.get('stats', {})
+                html_content += f"""
+                        <tr>
+                            <td>{variant['variant_id'][:8]}...</td>
+                            <td>{variant['variant_type']}</td>
+                            <td>{variant['layout_type']}</td>
+                            <td>{stats.get('impressions', 0)}</td>
+                            <td>{stats.get('clicks', 0)}</td>
+                            <td>{stats.get('conversions', 0)}</td>
+                            <td>{stats.get('ctr', 0):.2f}%</td>
+                            <td>{stats.get('cvr', 0):.2f}%</td>
+                        </tr>
+                """
+            
+            html_content += """
+                    </table>
+                </div>
+                
+                <div class="section">
+                    <h2>인사이트</h2>
+                    <ul>
+            """
+            
+            for insight in report['insights']:
+                html_content += f"<li>{insight}</li>"
+            
+            html_content += """
+                    </ul>
+                </div>
+                
+                <div class="section">
+                    <h2>권장사항</h2>
+                    <ul>
+            """
+            
+            for recommendation in report['recommendations']:
+                html_content += f"<li>{recommendation}</li>"
+            
+            html_content += """
+                    </ul>
+                </div>
+            </body>
+            </html>
+            """
+            
+            return html_content
+            
+        except Exception as e:
+            raise Exception(f"PDF 생성 중 오류: {str(e)}")
 
 def initialize_dashboard(ab_test_manager: ABTestManager) -> DashboardManager:
     """대시보드 초기화"""

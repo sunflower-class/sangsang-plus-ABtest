@@ -344,6 +344,7 @@ class AutopilotScheduler:
         try:
             active_tests = [test for test in self.ab_test_manager.tests.values() if test.status == TestStatus.ACTIVE]
             completed_tests = [test for test in self.ab_test_manager.tests.values() if test.status in [TestStatus.COMPLETED, TestStatus.WINNER_SELECTED]]
+            autopilot_tests = [test for test in self.ab_test_manager.tests.values() if test.test_mode == TestMode.AUTOPILOT]
             
             return {
                 "enabled": self.config.enabled,
@@ -351,6 +352,8 @@ class AutopilotScheduler:
                 "active_tests_count": len(active_tests),
                 "completed_tests_count": len(completed_tests),
                 "total_tests_count": len(self.ab_test_manager.tests),
+                "active_autopilot_experiments": len([t for t in autopilot_tests if t.status == TestStatus.ACTIVE]),
+                "total_traffic_usage": sum(self.ab_test_manager.traffic_budget_usage.values()) if hasattr(self.ab_test_manager, 'traffic_budget_usage') else 0.0,
                 "auto_cycle_queue_size": len(self.ab_test_manager.auto_cycle_queue),
                 "cycle_manager_running": self.cycle_manager.is_running,
                 "last_check_time": datetime.now().isoformat(),
