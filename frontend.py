@@ -27,12 +27,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 브라우저 경고 줄이기 위한 설정
-st.set_page_config(
-    page_title="A/B 테스트 시스템",
-    page_icon="🧪",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+try:
+    st.set_page_config(
+        page_title="A/B 테스트 시스템",
+        page_icon="🧪",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+except Exception as e:
+    logger.warning(f"페이지 설정 중 오류 (무시됨): {e}")
+    pass
 
 # 사용자 정의 CSS와 JavaScript로 브라우저 경고 숨기기
 st.markdown("""
@@ -144,6 +148,11 @@ st.markdown("""
 API_BASE_URL = "http://localhost:5001"
 
 def main():
+    # 세션 상태 초기화
+    if 'initialized' not in st.session_state:
+        st.session_state.initialized = True
+        logger.info("세션 상태 초기화 완료")
+    
     st.title("🧪 상품 상세페이지 A/B 테스트 시스템 (AI 기능 테스트용)")
     st.markdown("---")
     
@@ -248,20 +257,24 @@ def create_test():
     st.info("실험 계약서 형식으로 A/B 테스트를 생성합니다.")
     
     # 테스트 생성 성공 메시지 표시
-    if st.session_state.get('test_created', False):
-        result = st.session_state.get('test_result', {})
-        st.success(f"✅ 테스트가 성공적으로 생성되었습니다!")
-        st.info(f"테스트 ID: {result.get('test_id', 'N/A')}")
-        
-        # 테스트 시작 버튼
-        if st.button("🚀 테스트 시작하기", key="start_test_btn"):
-            start_test(result.get('test_id'))
-            # 세션 상태 초기화
-            st.session_state.test_created = False
-            st.session_state.test_result = {}
-            st.rerun()
-        
-        st.markdown("---")
+    try:
+        if st.session_state.get('test_created', False):
+            result = st.session_state.get('test_result', {})
+            st.success(f"✅ 테스트가 성공적으로 생성되었습니다!")
+            st.info(f"테스트 ID: {result.get('test_id', 'N/A')}")
+            
+            # 테스트 시작 버튼
+            if st.button("🚀 테스트 시작하기", key="start_test_btn"):
+                start_test(result.get('test_id'))
+                # 세션 상태 초기화
+                st.session_state.test_created = False
+                st.session_state.test_result = {}
+                st.rerun()
+            
+            st.markdown("---")
+    except Exception as e:
+        logger.warning(f"세션 상태 처리 중 오류 (무시됨): {e}")
+        pass
     
     with st.form("create_test_form"):
         st.subheader("📝 기본 정보")
@@ -368,10 +381,14 @@ def create_test():
                     if response.status_code == 200:
                         result = response.json()
                         # 생성된 테스트를 세션에 저장
-                        st.session_state.created_test_id = result['test_id']
-                        st.session_state.test_created = True
-                        st.session_state.test_result = result
-                        st.rerun()
+                        try:
+                            st.session_state.created_test_id = result['test_id']
+                            st.session_state.test_created = True
+                            st.session_state.test_result = result
+                            st.rerun()
+                        except Exception as e:
+                            logger.warning(f"세션 상태 저장 중 오류 (무시됨): {e}")
+                            st.rerun()
                     else:
                         st.error(f"테스트 생성에 실패했습니다: {response.text}")
                 except Exception as e:
@@ -1733,6 +1750,7 @@ def simulate_user_behavior(test_id, user_count, impression_rate, click_rate, con
     st.info(f"  - 이상치 행동: {guardrail_violations['outlier_behavior']}건")
     st.info(f"  - 성능 이슈: {guardrail_violations['performance_issues']}건")
 
+@st.cache_data(ttl=60)  # 60초 캐시
 def get_test_list():
     """테스트 목록을 가져오는 유틸리티 함수"""
     try:
@@ -1740,13 +1758,18 @@ def get_test_list():
         if response.status_code == 200:
             return response.json()["tests"]
         else:
-            st.error(f"테스트 목록을 불러올 수 없습니다. 상태 코드: {response.status_code}")
+            logger.error(f"테스트 목록을 불러올 수 없습니다. 상태 코드: {response.status_code}")
             return []
     except Exception as e:
-        st.error(f"오류가 발생했습니다: {e}")
+        logger.error(f"테스트 목록 조회 중 오류: {e}")
         return []
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        logger.error(f"메인 함수 실행 중 오류: {e}")
+        st.error(f"애플리케이션 오류가 발생했습니다: {e}")
+        st.info("페이지를 새로고침해주세요.")
 
 
