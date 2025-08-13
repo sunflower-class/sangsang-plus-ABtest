@@ -1,6 +1,7 @@
 import os
 import json
 import threading
+import logging
 from typing import Dict, Any, Optional, List
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
@@ -12,6 +13,17 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from confluent_kafka import Producer, Consumer, KafkaException
+
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('app.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # A/B 테스트 모듈 import
 from ab_test_manager import (
@@ -1137,46 +1149,58 @@ async def run_autopilot_cycle():
 @app.post("/api/abtest/autopilot/test-mode", summary="테스트 모드 설정")
 async def set_test_mode(enabled: bool = True):
     """테스트 모드를 활성화/비활성화"""
+    logger.info(f"테스트 모드 설정 요청: enabled={enabled}")
     try:
         if enabled:
             # 테스트 모드로 설정 변경
+            logger.info("테스트 모드 활성화 중...")
             autopilot_scheduler.config.test_mode = True
             autopilot_scheduler.config.check_interval_hours = 1
             autopilot_scheduler.config.cycle_check_interval_hours = 1
             autopilot_scheduler.config.manual_decision_timeout_hours = 1
             message = "테스트 모드가 활성화되었습니다. (1시간 간격)"
+            logger.info("테스트 모드 활성화 완료")
         else:
             # 일반 모드로 복원
+            logger.info("일반 모드로 복원 중...")
             autopilot_scheduler.config.test_mode = False
             autopilot_scheduler.config.check_interval_hours = 24
             autopilot_scheduler.config.cycle_check_interval_hours = 6
             autopilot_scheduler.config.manual_decision_timeout_hours = 168
             message = "일반 모드로 복원되었습니다."
+            logger.info("일반 모드 복원 완료")
         
-        return {
+        result = {
             "status": "success",
             "test_mode": enabled,
             "message": message
         }
+        logger.info(f"테스트 모드 설정 완료: {result}")
+        return result
     except Exception as e:
+        logger.error(f"테스트 모드 설정 중 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=f"테스트 모드 설정 중 오류가 발생했습니다: {str(e)}")
 
 @app.post("/api/abtest/autopilot/fast-cycle", summary="빠른 사이클 실행")
 async def run_fast_cycle():
     """테스트용 빠른 사이클 실행 (1분 간격)"""
+    logger.info("빠른 사이클 실행 요청")
     try:
         # 모든 대기 중인 테스트를 즉시 처리
         processed_tests = 0
         
+        logger.info("수동 결정 타임아웃 체크 시작")
         # 수동 결정 타임아웃 체크
         for test_id in list(ab_test_manager.tests.keys()):
             try:
                 if ab_test_manager.check_manual_decision_timeout(test_id):
                     processed_tests += 1
+                    logger.info(f"수동 결정 타임아웃 처리: test_id={test_id}")
             except Exception as e:
-                print(f"수동 결정 타임아웃 체크 오류 (test_id: {test_id}): {e}")
+                logger.error(f"수동 결정 타임아웃 체크 오류 (test_id: {test_id}): {e}")
                 continue
         
+        logger.info("장기 모니터링 완료 체크 시작")
         # 장기 모니터링 완료 체크
         for test_id in list(ab_test_manager.tests.keys()):
             try:
@@ -1185,10 +1209,12 @@ async def run_fast_cycle():
                     if test.long_term_monitoring_end_date and datetime.now() >= test.long_term_monitoring_end_date:
                         ab_test_manager.complete_cycle(test_id)
                         processed_tests += 1
+                        logger.info(f"장기 모니터링 완료 처리: test_id={test_id}")
             except Exception as e:
-                print(f"장기 모니터링 체크 오류 (test_id: {test_id}): {e}")
+                logger.error(f"장기 모니터링 체크 오류 (test_id: {test_id}): {e}")
                 continue
         
+        logger.info("자동 사이클 대기열 처리 시작")
         # 자동 사이클 대기열 처리
         current_time = datetime.now()
         for test_id in list(ab_test_manager.auto_cycle_queue):
@@ -1197,16 +1223,20 @@ async def run_fast_cycle():
                 if scheduled_date and current_time >= scheduled_date:
                     ab_test_manager.start_next_cycle(test_id)
                     processed_tests += 1
+                    logger.info(f"자동 사이클 대기열 처리: test_id={test_id}")
             except Exception as e:
-                print(f"자동 사이클 대기열 처리 오류 (test_id: {test_id}): {e}")
+                logger.error(f"자동 사이클 대기열 처리 오류 (test_id: {test_id}): {e}")
                 continue
         
-        return {
+        result = {
             "status": "success",
             "processed_tests": processed_tests,
             "message": f"{processed_tests}개의 테스트가 처리되었습니다."
         }
+        logger.info(f"빠른 사이클 실행 완료: {result}")
+        return result
     except Exception as e:
+        logger.error(f"빠른 사이클 실행 중 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=f"빠른 사이클 실행 중 오류가 발생했습니다: {str(e)}")
 
 @app.post("/api/abtest/autopilot/accelerate-time", summary="시간 가속")

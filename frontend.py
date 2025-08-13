@@ -13,6 +13,18 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
+import logging
+
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('frontend.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # 브라우저 경고 줄이기 위한 설정
 st.set_page_config(
@@ -640,6 +652,39 @@ def show_autopilot():
     """자동 생성기 화면"""
     st.header("🤖 자동 생성기")
     
+    # 실시간 로그 표시
+    if st.checkbox("📋 실시간 로그 보기"):
+        st.subheader("📋 실시간 로그")
+        
+        # 로그 파일 읽기
+        try:
+            with open('frontend.log', 'r') as f:
+                log_lines = f.readlines()
+            
+            # 최근 50줄만 표시
+            recent_logs = log_lines[-50:] if len(log_lines) > 50 else log_lines
+            
+            # 로그를 역순으로 표시 (최신 로그가 위에)
+            for line in reversed(recent_logs):
+                if line.strip():
+                    # 로그 레벨에 따른 색상 구분
+                    if "ERROR" in line:
+                        st.error(line.strip())
+                    elif "WARNING" in line:
+                        st.warning(line.strip())
+                    elif "INFO" in line:
+                        st.info(line.strip())
+                    else:
+                        st.text(line.strip())
+        except FileNotFoundError:
+            st.info("로그 파일이 아직 생성되지 않았습니다.")
+        
+        # 로그 새로고침 버튼
+        if st.button("🔄 로그 새로고침"):
+            st.rerun()
+        
+        st.markdown("---")
+    
     try:
         # Autopilot 상태 조회
         status_response = requests.get(f"{API_BASE_URL}/api/abtest/autopilot/status")
@@ -670,21 +715,39 @@ def show_autopilot():
             
             with col1:
                 if st.button("🚀 테스트 모드 활성화", type="primary"):
-                    response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/test-mode", params={"enabled": True})
-                    if response.status_code == 200:
-                        st.success("테스트 모드가 활성화되었습니다!")
-                        st.rerun()
-                    else:
-                        st.error("테스트 모드 활성화 실패")
+                    logger.info("🚀 테스트 모드 활성화 버튼 클릭됨")
+                    try:
+                        response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/test-mode", params={"enabled": True})
+                        logger.info(f"API 응답 상태 코드: {response.status_code}")
+                        if response.status_code == 200:
+                            result = response.json()
+                            logger.info(f"테스트 모드 활성화 성공: {result}")
+                            st.success("테스트 모드가 활성화되었습니다!")
+                            st.rerun()
+                        else:
+                            logger.error(f"테스트 모드 활성화 실패: {response.text}")
+                            st.error("테스트 모드 활성화 실패")
+                    except Exception as e:
+                        logger.error(f"테스트 모드 활성화 중 오류: {str(e)}")
+                        st.error(f"오류: {str(e)}")
             
             with col2:
                 if st.button("📊 일반 모드로 복원"):
-                    response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/test-mode", params={"enabled": False})
-                    if response.status_code == 200:
-                        st.success("일반 모드로 복원되었습니다!")
-                        st.rerun()
-                    else:
-                        st.error("모드 변경 실패")
+                    logger.info("📊 일반 모드로 복원 버튼 클릭됨")
+                    try:
+                        response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/test-mode", params={"enabled": False})
+                        logger.info(f"API 응답 상태 코드: {response.status_code}")
+                        if response.status_code == 200:
+                            result = response.json()
+                            logger.info(f"일반 모드 복원 성공: {result}")
+                            st.success("일반 모드로 복원되었습니다!")
+                            st.rerun()
+                        else:
+                            logger.error(f"일반 모드 복원 실패: {response.text}")
+                            st.error("모드 변경 실패")
+                    except Exception as e:
+                        logger.error(f"일반 모드 복원 중 오류: {str(e)}")
+                        st.error(f"오류: {str(e)}")
         else:
             st.error("Autopilot 상태를 불러올 수 없습니다.")
         
@@ -699,36 +762,60 @@ def show_autopilot():
     
     with col1:
         if st.button("🔄 빠른 사이클 실행", type="secondary"):
+            logger.info("🔄 빠른 사이클 실행 버튼 클릭됨")
             with st.spinner("빠른 사이클을 실행 중입니다..."):
-                response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/fast-cycle")
-                if response.status_code == 200:
-                    result = response.json()
-                    st.success(f"✅ {result['processed_tests']}개 테스트 처리됨")
-                    st.rerun()
-                else:
-                    st.error("빠른 사이클 실행 실패")
+                try:
+                    response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/fast-cycle")
+                    logger.info(f"빠른 사이클 API 응답 상태 코드: {response.status_code}")
+                    if response.status_code == 200:
+                        result = response.json()
+                        logger.info(f"빠른 사이클 실행 성공: {result}")
+                        st.success(f"✅ {result['processed_tests']}개 테스트 처리됨")
+                        st.rerun()
+                    else:
+                        logger.error(f"빠른 사이클 실행 실패: {response.text}")
+                        st.error("빠른 사이클 실행 실패")
+                except Exception as e:
+                    logger.error(f"빠른 사이클 실행 중 오류: {str(e)}")
+                    st.error(f"오류: {str(e)}")
     
     with col2:
         if st.button("⏰ 시간 가속 (1시간)", type="secondary"):
+            logger.info("⏰ 시간 가속 (1시간) 버튼 클릭됨")
             with st.spinner("시간을 가속 중입니다..."):
-                response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/accelerate-time", params={"hours": 1})
-                if response.status_code == 200:
-                    result = response.json()
-                    st.success(f"✅ {result['accelerated_tests']}개 테스트 시간 가속됨")
-                    st.rerun()
-                else:
-                    st.error("시간 가속 실패")
+                try:
+                    response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/accelerate-time", params={"hours": 1})
+                    logger.info(f"시간 가속 API 응답 상태 코드: {response.status_code}")
+                    if response.status_code == 200:
+                        result = response.json()
+                        logger.info(f"시간 가속 성공: {result}")
+                        st.success(f"✅ {result['accelerated_tests']}개 테스트 시간 가속됨")
+                        st.rerun()
+                    else:
+                        logger.error(f"시간 가속 실패: {response.text}")
+                        st.error("시간 가속 실패")
+                except Exception as e:
+                    logger.error(f"시간 가속 중 오류: {str(e)}")
+                    st.error(f"오류: {str(e)}")
     
     with col3:
         if st.button("🚀 자동 생성 실행", type="secondary"):
+            logger.info("🚀 자동 생성 실행 버튼 클릭됨")
             with st.spinner("자동 생성을 실행 중입니다..."):
-                response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/run-cycle")
-                if response.status_code == 200:
-                    result = response.json()
-                    st.success(f"✅ {result['experiments_created']}개 실험 생성됨")
-                    st.rerun()
-                else:
-                    st.error("자동 생성 실행 실패")
+                try:
+                    response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/run-cycle")
+                    logger.info(f"자동 생성 API 응답 상태 코드: {response.status_code}")
+                    if response.status_code == 200:
+                        result = response.json()
+                        logger.info(f"자동 생성 성공: {result}")
+                        st.success(f"✅ {result['experiments_created']}개 실험 생성됨")
+                        st.rerun()
+                    else:
+                        logger.error(f"자동 생성 실행 실패: {response.text}")
+                        st.error("자동 생성 실행 실패")
+                except Exception as e:
+                    logger.error(f"자동 생성 중 오류: {str(e)}")
+                    st.error(f"오류: {str(e)}")
     
     st.markdown("---")
     
@@ -738,33 +825,59 @@ def show_autopilot():
     
     with col1:
         if st.button("🔄 자동 생성 사이클 실행"):
+            logger.info("🔄 자동 생성 사이클 실행 버튼 클릭됨")
             with st.spinner("자동 생성 사이클을 실행 중입니다..."):
-                response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/run-cycle")
-                if response.status_code == 200:
-                    result = response.json()
-                    st.success(f"✅ {result['experiments_created']}개의 실험이 생성되었습니다.")
-                    st.rerun()
-                else:
-                    st.error("자동 생성 사이클 실행 실패")
+                try:
+                    response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/run-cycle")
+                    logger.info(f"자동 생성 사이클 API 응답 상태 코드: {response.status_code}")
+                    if response.status_code == 200:
+                        result = response.json()
+                        logger.info(f"자동 생성 사이클 성공: {result}")
+                        st.success(f"✅ {result['experiments_created']}개의 실험이 생성되었습니다.")
+                        st.rerun()
+                    else:
+                        logger.error(f"자동 생성 사이클 실행 실패: {response.text}")
+                        st.error("자동 생성 사이클 실행 실패")
+                except Exception as e:
+                    logger.error(f"자동 생성 사이클 중 오류: {str(e)}")
+                    st.error(f"오류: {str(e)}")
     
     with col2:
         # 프로모션 모드 토글
         if status["promotion_mode"]:
             if st.button("📊 프로모션 모드 비활성화"):
-                response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/promotion-mode", params={"enabled": False})
-                if response.status_code == 200:
-                    st.success("프로모션 모드가 비활성화되었습니다.")
-                    st.rerun()
-                else:
-                    st.error("프로모션 모드 비활성화 실패")
+                logger.info("📊 프로모션 모드 비활성화 버튼 클릭됨")
+                try:
+                    response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/promotion-mode", params={"enabled": False})
+                    logger.info(f"프로모션 모드 비활성화 API 응답 상태 코드: {response.status_code}")
+                    if response.status_code == 200:
+                        result = response.json()
+                        logger.info(f"프로모션 모드 비활성화 성공: {result}")
+                        st.success("프로모션 모드가 비활성화되었습니다.")
+                        st.rerun()
+                    else:
+                        logger.error(f"프로모션 모드 비활성화 실패: {response.text}")
+                        st.error("프로모션 모드 비활성화 실패")
+                except Exception as e:
+                    logger.error(f"프로모션 모드 비활성화 중 오류: {str(e)}")
+                    st.error(f"오류: {str(e)}")
         else:
             if st.button("🎯 프로모션 모드 활성화"):
-                response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/promotion-mode", params={"enabled": True})
-                if response.status_code == 200:
-                    st.success("프로모션 모드가 활성화되었습니다.")
-                    st.rerun()
-                else:
-                    st.error("프로모션 모드 활성화 실패")
+                logger.info("🎯 프로모션 모드 활성화 버튼 클릭됨")
+                try:
+                    response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/promotion-mode", params={"enabled": True})
+                    logger.info(f"프로모션 모드 활성화 API 응답 상태 코드: {response.status_code}")
+                    if response.status_code == 200:
+                        result = response.json()
+                        logger.info(f"프로모션 모드 활성화 성공: {result}")
+                        st.success("프로모션 모드가 활성화되었습니다.")
+                        st.rerun()
+                    else:
+                        logger.error(f"프로모션 모드 활성화 실패: {response.text}")
+                        st.error("프로모션 모드 활성화 실패")
+                except Exception as e:
+                    logger.error(f"프로모션 모드 활성화 중 오류: {str(e)}")
+                    st.error(f"오류: {str(e)}")
     
     # 상세 상태 정보
     st.markdown("---")
