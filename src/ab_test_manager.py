@@ -17,6 +17,9 @@ class TestStatus(Enum):
     PAUSED = "paused"
     COMPLETED = "completed"
     ARCHIVED = "archived"
+    MANUAL_DECISION = "manual_decision"  # 수동 결정 대기 상태
+    WINNER_SELECTED = "winner_selected"  # 승자 선택됨
+    CYCLE_COMPLETED = "cycle_completed"  # 사이클 완료
 
 class VariantType(Enum):
     A = "A"
@@ -32,6 +35,11 @@ class DistributionMode(Enum):
 class TestMode(Enum):
     MANUAL = "manual"  # 수동 생성
     AUTOPILOT = "autopilot"  # 자동 생성
+
+class DecisionMode(Enum):
+    AUTO = "auto"  # 자동 결정
+    MANUAL = "manual"  # 수동 결정
+    HYBRID = "hybrid"  # 하이브리드 (수동 결정 기간 후 자동)
 
 @dataclass
 class ExperimentBrief:
@@ -65,6 +73,12 @@ class ExperimentBrief:
     termination_rules: Dict[str, Any]
     promotion_rules: Dict[str, Any]
     rollback_rules: Dict[str, Any]
+    
+    # 결정 모드 설정
+    decision_mode: DecisionMode = DecisionMode.HYBRID
+    manual_decision_period_days: int = 7  # 수동 결정 기간 (1주일)
+    long_term_monitoring_days: int = 30  # 장기 모니터링 기간 (1달)
+    auto_decision_confidence: float = 0.95  # 자동 결정 신뢰도 임계값
 
 @dataclass
 class ProductInfo:
@@ -160,6 +174,20 @@ class ABTest:
     auto_rollback: bool = True
     rollback_threshold: float = -0.2  # -20%
     winner_variant_id: Optional[str] = None  # 승자 변형 ID
+    
+    # 새로운 기능: 결정 관리
+    decision_mode: DecisionMode = DecisionMode.HYBRID
+    manual_decision_start_date: Optional[datetime] = None  # 수동 결정 시작일
+    manual_decision_end_date: Optional[datetime] = None  # 수동 결정 종료일
+    long_term_monitoring_start_date: Optional[datetime] = None  # 장기 모니터링 시작일
+    long_term_monitoring_end_date: Optional[datetime] = None  # 장기 모니터링 종료일
+    auto_decision_confidence: float = 0.95  # 자동 결정 신뢰도 임계값
+    
+    # 사이클 관리
+    cycle_number: int = 1  # 현재 사이클 번호
+    max_cycles: int = 5  # 최대 사이클 수
+    previous_winner_variant_id: Optional[str] = None  # 이전 사이클 승자
+    cycle_completion_date: Optional[datetime] = None  # 사이클 완료일
 
 @dataclass
 class TestEvent:
@@ -262,6 +290,17 @@ class ABTestManager:
         
         # 승자 처리 상태
         self.promotion_status: Dict[str, Dict[str, Any]] = {}  # test_id -> promotion_info
+        
+        # 새로운 기능: 결정 관리
+        self.manual_decisions: Dict[str, Dict[str, Any]] = {}  # test_id -> manual_decision_info
+        self.cycle_history: Dict[str, List[Dict[str, Any]]] = {}  # test_id -> cycle_history
+        
+        # 장기 모니터링 데이터
+        self.long_term_metrics: Dict[str, Dict[str, List[float]]] = {}  # test_id -> {metric: [values]}
+        
+        # 자동화 루프 관리
+        self.auto_cycle_queue: List[str] = []  # 자동 사이클 대기열
+        self.cycle_scheduler: Dict[str, datetime] = {}  # 사이클 스케줄
     
     def create_test(self, test_name: str, product_info: ProductInfo, 
                    variants: List[PageVariant], duration_days: int = 14,
@@ -332,13 +371,432 @@ class ABTestManager:
         test.end_date = datetime.now()
         test.updated_at = datetime.now()
         
-        # 테스트 완료 시 승자 자동 결정
-        results = self.get_test_results(test_id)
-        if results and "winner" in results:
-            # 승자 정보를 테스트에 저장
-            test.winner_variant_id = results["winner"]
+        # 결정 모드에 따른 처리
+        if test.decision_mode == DecisionMode.AUTO:
+            # 자동 결정
+            self._auto_determine_winner(test_id)
+        elif test.decision_mode == DecisionMode.MANUAL:
+            # 수동 결정 대기
+            self._start_manual_decision_period(test_id)
+        elif test.decision_mode == DecisionMode.HYBRID:
+            # 하이브리드: 수동 결정 기간 후 자동
+            self._start_manual_decision_period(test_id)
         
         return True
+    
+    def _start_manual_decision_period(self, test_id: str) -> bool:
+        """수동 결정 기간 시작"""
+        if test_id not in self.tests:
+            return False
+        
+        test = self.tests[test_id]
+        test.status = TestStatus.MANUAL_DECISION
+        test.manual_decision_start_date = datetime.now()
+        test.manual_decision_end_date = datetime.now() + timedelta(days=test.experiment_brief.manual_decision_period_days)
+        test.updated_at = datetime.now()
+        
+        # 수동 결정 정보 초기화
+        self.manual_decisions[test_id] = {
+            "start_date": test.manual_decision_start_date,
+            "end_date": test.manual_decision_end_date,
+            "manual_winner": None,
+            "decision_made": False,
+            "decision_reason": ""
+        }
+        
+        return True
+    
+    def _auto_determine_winner(self, test_id: str) -> Optional[str]:
+        """자동 승자 결정"""
+        if test_id not in self.tests:
+            return None
+        
+        test = self.tests[test_id]
+        results = self.get_test_results(test_id)
+        
+        if not results or "winner" not in results:
+            return None
+        
+        winner_id = results["winner"]
+        test.winner_variant_id = winner_id
+        test.status = TestStatus.WINNER_SELECTED
+        test.updated_at = datetime.now()
+        
+        # 승자 결정 로그
+        self.manual_decisions[test_id] = {
+            "auto_winner": winner_id,
+            "decision_made": True,
+            "decision_reason": "자동 결정",
+            "decision_date": datetime.now()
+        }
+        
+        return winner_id
+    
+    def manual_select_winner(self, test_id: str, variant_id: str, reason: str = "") -> bool:
+        """수동으로 승자 선택"""
+        if test_id not in self.tests:
+            return False
+        
+        test = self.tests[test_id]
+        if test.status != TestStatus.MANUAL_DECISION:
+            return False
+        
+        # 승자 설정
+        test.winner_variant_id = variant_id
+        test.status = TestStatus.WINNER_SELECTED
+        test.updated_at = datetime.now()
+        
+        # 수동 결정 정보 업데이트
+        if test_id in self.manual_decisions:
+            self.manual_decisions[test_id].update({
+                "manual_winner": variant_id,
+                "decision_made": True,
+                "decision_reason": reason,
+                "decision_date": datetime.now()
+            })
+        
+        return True
+    
+    def check_manual_decision_timeout(self, test_id: str) -> bool:
+        """수동 결정 기간 만료 확인"""
+        if test_id not in self.tests:
+            return False
+        
+        test = self.tests[test_id]
+        if test.status != TestStatus.MANUAL_DECISION:
+            return False
+        
+        if test.manual_decision_end_date and datetime.now() > test.manual_decision_end_date:
+            # 수동 결정 기간 만료 - 자동 결정
+            self._auto_determine_winner(test_id)
+            return True
+        
+        return False
+    
+    def start_long_term_monitoring(self, test_id: str) -> bool:
+        """장기 모니터링 시작 (1달)"""
+        if test_id not in self.tests:
+            return False
+        
+        test = self.tests[test_id]
+        # 더 유연한 조건: 승자가 선택되었거나 완료된 상태
+        if test.status not in [TestStatus.WINNER_SELECTED, TestStatus.COMPLETED, TestStatus.MANUAL_DECISION]:
+            return False
+        
+        test.long_term_monitoring_start_date = datetime.now()
+        
+        # experiment_brief가 있는 경우에만 사용
+        if test.experiment_brief:
+            test.long_term_monitoring_end_date = datetime.now() + timedelta(days=test.experiment_brief.long_term_monitoring_days)
+        else:
+            test.long_term_monitoring_end_date = datetime.now() + timedelta(days=30)  # 기본값
+        
+        test.updated_at = datetime.now()
+        
+        # 장기 모니터링 데이터 초기화
+        self.long_term_metrics[test_id] = {
+            "cvr": [],
+            "ctr": [],
+            "revenue": [],
+            "impressions": [],
+            "conversions": []
+        }
+        
+        return True
+    
+    def record_long_term_metrics(self, test_id: str, metrics: Dict[str, float]) -> bool:
+        """장기 모니터링 메트릭 기록"""
+        if test_id not in self.long_term_metrics:
+            return False
+        
+        for metric, value in metrics.items():
+            if metric in self.long_term_metrics[test_id]:
+                self.long_term_metrics[test_id][metric].append(value)
+        
+        return True
+    
+    def get_long_term_performance(self, test_id: str) -> Dict[str, Any]:
+        """장기 성과 분석"""
+        if test_id not in self.long_term_metrics:
+            return {}
+        
+        metrics = self.long_term_metrics[test_id]
+        performance = {}
+        
+        for metric, values in metrics.items():
+            if values:
+                performance[f"{metric}_avg"] = np.mean(values)
+                performance[f"{metric}_trend"] = np.polyfit(range(len(values)), values, 1)[0]  # 선형 트렌드
+                performance[f"{metric}_stability"] = np.std(values) / np.mean(values) if np.mean(values) > 0 else 0
+        
+        return performance
+    
+    def complete_cycle(self, test_id: str) -> bool:
+        """사이클 완료 처리"""
+        if test_id not in self.tests:
+            return False
+        
+        test = self.tests[test_id]
+        test.status = TestStatus.CYCLE_COMPLETED
+        test.cycle_completion_date = datetime.now()
+        test.updated_at = datetime.now()
+        
+        # 사이클 히스토리 기록
+        try:
+            results = self.get_test_results(test_id)
+            total_impressions = 0
+            total_conversions = 0
+            
+            if results and "variants" in results:
+                for variant_result in results["variants"].values():
+                    total_impressions += variant_result.get("impressions", 0)
+                    total_conversions += variant_result.get("conversions", 0)
+            
+            # 장기 성과 데이터 안전하게 가져오기
+            long_term_performance = {}
+            try:
+                long_term_performance = self.get_long_term_performance(test_id)
+            except Exception as e:
+                print(f"Warning: Failed to get long term performance for {test_id}: {e}")
+                long_term_performance = {}
+            
+            cycle_info = {
+                "cycle_number": test.cycle_number,
+                "winner_variant_id": test.winner_variant_id,
+                "completion_date": test.cycle_completion_date,
+                "long_term_performance": long_term_performance,
+                "total_impressions": total_impressions,
+                "total_conversions": total_conversions
+            }
+            
+            if test_id not in self.cycle_history:
+                self.cycle_history[test_id] = []
+            self.cycle_history[test_id].append(cycle_info)
+        except Exception as e:
+            # 사이클 히스토리 기록 실패해도 사이클 완료는 진행
+            print(f"Warning: Failed to record cycle history for {test_id}: {e}")
+        
+        # 다음 사이클 준비
+        if test.cycle_number < test.max_cycles:
+            self._prepare_next_cycle(test_id)
+        else:
+            # 최대 사이클 도달 - 아카이브
+            test.status = TestStatus.ARCHIVED
+        
+        return True
+    
+    def _prepare_next_cycle(self, test_id: str) -> bool:
+        """다음 사이클 준비"""
+        if test_id not in self.tests:
+            return False
+        
+        test = self.tests[test_id]
+        
+        # 이전 승자 정보 저장
+        test.previous_winner_variant_id = test.winner_variant_id
+        
+        # 자동 사이클 대기열에 추가
+        if test_id not in self.auto_cycle_queue:
+            self.auto_cycle_queue.append(test_id)
+        
+        # 다음 사이클 스케줄 (7일 후)
+        next_cycle_date = datetime.now() + timedelta(days=7)
+        self.cycle_scheduler[test_id] = next_cycle_date
+        
+        return True
+    
+    def create_next_cycle_variants(self, test_id: str) -> List[PageVariant]:
+        """다음 사이클을 위한 새로운 변형 생성"""
+        if test_id not in self.tests:
+            return []
+        
+        test = self.tests[test_id]
+        previous_winner = test.previous_winner_variant_id
+        
+        # 이전 승자 변형 찾기
+        winner_variant = None
+        for variant in test.variants:
+            if variant.variant_id == previous_winner:
+                winner_variant = variant
+                break
+        
+        if not winner_variant:
+            return []
+        
+        # 새로운 변형 생성 (승자 기반 최적화)
+        new_variants = []
+        
+        # 변형 A: 이전 승자 (기준)
+        variant_a = PageVariant(
+            variant_id=str(uuid.uuid4()),
+            variant_type=VariantType.A,
+            title=winner_variant.title,
+            description=winner_variant.description,
+            layout_type=winner_variant.layout_type,
+            color_scheme=winner_variant.color_scheme,
+            cta_text=winner_variant.cta_text,
+            cta_color=winner_variant.cta_color,
+            cta_position=winner_variant.cta_position,
+            additional_features=winner_variant.additional_features,
+            image_style=winner_variant.image_style,
+            font_style=winner_variant.font_style,
+            created_at=datetime.now()
+        )
+        new_variants.append(variant_a)
+        
+        # 변형 B: 승자 기반 개선 (CTA 최적화)
+        variant_b = PageVariant(
+            variant_id=str(uuid.uuid4()),
+            variant_type=VariantType.B,
+            title=winner_variant.title,
+            description=winner_variant.description,
+            layout_type=winner_variant.layout_type,
+            color_scheme=winner_variant.color_scheme,
+            cta_text="지금 구매하기",  # 더 강력한 CTA
+            cta_color="#dc2626",  # 빨간색으로 변경
+            cta_position="floating",  # 플로팅으로 변경
+            additional_features=winner_variant.additional_features + ["긴급성"],
+            image_style=winner_variant.image_style,
+            font_style=winner_variant.font_style,
+            created_at=datetime.now()
+        )
+        new_variants.append(variant_b)
+        
+        # 변형 C: 승자 기반 개선 (레이아웃 최적화)
+        variant_c = PageVariant(
+            variant_id=str(uuid.uuid4()),
+            variant_type=VariantType.C,
+            title=winner_variant.title,
+            description=winner_variant.description,
+            layout_type="hero",  # 히어로 레이아웃으로 변경
+            color_scheme=winner_variant.color_scheme,
+            cta_text=winner_variant.cta_text,
+            cta_color=winner_variant.cta_color,
+            cta_position="top",  # 상단으로 변경
+            additional_features=winner_variant.additional_features + ["프리미엄"],
+            image_style="enhanced",  # 향상된 이미지
+            font_style="bold",  # 굵은 폰트
+            created_at=datetime.now()
+        )
+        new_variants.append(variant_c)
+        
+        return new_variants
+    
+    def start_next_cycle(self, test_id: str) -> bool:
+        """다음 사이클 시작"""
+        if test_id not in self.tests:
+            return False
+        
+        test = self.tests[test_id]
+        
+        # 새로운 변형 생성
+        new_variants = self.create_next_cycle_variants(test_id)
+        if not new_variants:
+            return False
+        
+        # 테스트 정보 업데이트
+        test.cycle_number += 1
+        test.variants = new_variants
+        test.status = TestStatus.ACTIVE
+        test.start_date = datetime.now()
+        
+        # experiment_brief가 있는 경우에만 사용
+        try:
+            if test.experiment_brief and hasattr(test.experiment_brief, 'long_term_monitoring_days'):
+                test.end_date = test.start_date + timedelta(days=test.experiment_brief.long_term_monitoring_days)
+            else:
+                test.end_date = test.start_date + timedelta(days=30)  # 기본값
+        except Exception:
+            test.end_date = test.start_date + timedelta(days=30)  # 기본값
+        
+        test.winner_variant_id = None
+        test.manual_decision_start_date = None
+        test.manual_decision_end_date = None
+        test.long_term_monitoring_start_date = None
+        test.long_term_monitoring_end_date = None
+        test.cycle_completion_date = None
+        test.updated_at = datetime.now()
+        
+        # 트래픽 분할 재설정
+        test.traffic_split = {variant.variant_id: 100.0 / len(new_variants) for variant in new_variants}
+        
+        # 이벤트 초기화
+        self.events[test_id] = []
+        
+        # 자동 사이클 대기열에서 제거
+        if test_id in self.auto_cycle_queue:
+            self.auto_cycle_queue.remove(test_id)
+        
+        return True
+    
+    def get_cycle_status(self, test_id: str) -> Dict[str, Any]:
+        """사이클 상태 조회"""
+        if test_id not in self.tests:
+            return {}
+        
+        test = self.tests[test_id]
+        
+        return {
+            "test_id": test_id,
+            "cycle_number": test.cycle_number,
+            "max_cycles": test.max_cycles,
+            "status": test.status.value,
+            "previous_winner": test.previous_winner_variant_id,
+            "current_winner": test.winner_variant_id,
+            "cycle_completion_date": test.cycle_completion_date.isoformat() if test.cycle_completion_date else None,
+            "next_cycle_scheduled": self.cycle_scheduler.get(test_id),
+            "in_auto_queue": test_id in self.auto_cycle_queue,
+            "cycle_history": self.cycle_history.get(test_id, [])
+        }
+    
+    def get_manual_decision_info(self, test_id: str) -> Dict[str, Any]:
+        """수동 결정 정보 조회"""
+        if test_id not in self.manual_decisions:
+            return {}
+        
+        decision_info = self.manual_decisions[test_id]
+        test = self.tests.get(test_id)
+        
+        return {
+            "test_id": test_id,
+            "decision_mode": test.decision_mode.value if test else "unknown",
+            "manual_decision_start_date": decision_info.get("start_date"),
+            "manual_decision_end_date": decision_info.get("end_date"),
+            "manual_winner": decision_info.get("manual_winner"),
+            "auto_winner": decision_info.get("auto_winner"),
+            "decision_made": decision_info.get("decision_made", False),
+            "decision_reason": decision_info.get("decision_reason", ""),
+            "decision_date": decision_info.get("decision_date"),
+            "time_remaining": self._get_manual_decision_time_remaining(test_id)
+        }
+    
+    def _get_manual_decision_time_remaining(self, test_id: str) -> Optional[float]:
+        """수동 결정 남은 시간 (시간 단위)"""
+        if test_id not in self.tests:
+            return None
+        
+        test = self.tests[test_id]
+        if not test.manual_decision_end_date:
+            return None
+        
+        remaining = test.manual_decision_end_date - datetime.now()
+        return max(0, remaining.total_seconds() / 3600)  # 시간 단위
+    
+    def get_auto_cycle_queue(self) -> List[Dict[str, Any]]:
+        """자동 사이클 대기열 조회"""
+        queue_info = []
+        for test_id in self.auto_cycle_queue:
+            test = self.tests.get(test_id)
+            if test:
+                queue_info.append({
+                    "test_id": test_id,
+                    "test_name": test.test_name,
+                    "cycle_number": test.cycle_number,
+                    "scheduled_date": self.cycle_scheduler.get(test_id),
+                    "previous_winner": test.previous_winner_variant_id
+                })
+        
+        return queue_info
     
     def get_variant_for_user(self, test_id: str, user_id: str, session_id: str) -> Optional[PageVariant]:
         """사용자에게 표시할 변형 선택 (일관성 보장)"""

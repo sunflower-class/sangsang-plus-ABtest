@@ -140,7 +140,7 @@ def main():
     menu = st.sidebar.selectbox(
         "메뉴 선택",
         ["🏠 대시보드", "➕ 테스트 생성", "📊 테스트 관리", "📈 결과 분석", "👀 페이지 미리보기", 
-         "🧪 A/B 테스트 시뮬레이션", "🤖 자동 생성기", "📋 실험 계약서", "🚨 가드레일"]
+         "🧪 A/B 테스트 시뮬레이션", "🤖 자동 생성기", "📋 실험 계약서", "🚨 가드레일", "📊 실시간 추적"]
     )
     
     if menu == "🏠 대시보드":
@@ -154,13 +154,15 @@ def main():
     elif menu == "👀 페이지 미리보기":
         preview_pages()
     elif menu == "🧪 A/B 테스트 시뮬레이션":
-        show_ab_test_simulation()
+        simulation_page()
     elif menu == "🤖 자동 생성기":
         show_autopilot()
     elif menu == "📋 실험 계약서":
         show_experiment_brief()
     elif menu == "🚨 가드레일":
         show_guardrails()
+    elif menu == "📊 실시간 추적":
+        show_real_time_tracking()
     # 실시간 모니터링은 가드레일 모니터링으로 통합됨
 
 def show_dashboard():
@@ -635,184 +637,153 @@ def preview_pages():
         st.error(f"오류가 발생했습니다: {e}")
 
 def show_autopilot():
-    """자동 생성기 화면 - 요구사항 3번, 11번"""
-    st.header("🤖 자동 생성기 (Autopilot)")
-    st.info("AI가 자동으로 A/B 테스트를 생성하고 관리하는 시스템입니다.")
-    
-    with st.expander("📖 Autopilot이란?", expanded=False):
-        st.markdown("""
-        **Autopilot**은 AI 기반 자동 A/B 테스트 생성 및 관리 시스템입니다:
-        
-        - 🤖 **자동 후보 선별**: 트래픽, 재고, 쿨다운 조건을 고려한 상품 자동 선별
-        - 🎯 **스마트 스케줄링**: 매일/매주 자동으로 실험 생성 및 관리
-        - ⚖️ **트래픽 예산 관리**: 동시 실험 상한 및 쿨다운으로 과실험 방지
-        - 🛡️ **프로모션 모드**: 프로모션 기간 중 자동 실험 비활성화
-        - 📊 **성과 기반 최적화**: 승자 패턴을 학습하여 다음 실험에 반영
-        """)
-    
-    st.markdown("---")
-    
-    # Autopilot 상태 조회
-    st.subheader("📊 Autopilot 상태")
+    """자동 생성기 화면"""
+    st.header("🤖 자동 생성기")
     
     try:
+        # Autopilot 상태 조회
         status_response = requests.get(f"{API_BASE_URL}/api/abtest/autopilot/status")
         if status_response.status_code == 200:
-            status_data = status_response.json()
-            autopilot_status = status_data["autopilot_status"]
+            status = status_response.json()["autopilot_status"]
             
             # 상태 정보 표시
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("활성화 상태", "🟢 활성" if autopilot_status["enabled"] else "🔴 비활성")
+                st.metric("활성화", "✅ 활성" if status["enabled"] else "❌ 비활성")
             with col2:
-                st.metric("프로모션 모드", "🟡 활성" if autopilot_status["promotion_mode"] else "🟢 비활성")
+                st.metric("활성 테스트", status["active_tests_count"])
             with col3:
-                st.metric("활성 자동 실험", autopilot_status["active_autopilot_experiments"])
-            with col4:
-                st.metric("후보 상품 수", autopilot_status["candidate_count"])
+                st.metric("완료된 테스트", status["completed_tests_count"])
             
-            # 상세 정보
+            # 테스트 모드 상태
+            test_mode = status.get("config", {}).get("test_mode", False)
+            if test_mode:
+                st.success("🚀 테스트 모드 활성화됨 (빠른 간격)")
+            else:
+                st.info("📊 일반 모드 (실제 운영 간격)")
+            
+            st.markdown("---")
+            
+            # 테스트 모드 컨트롤
+            st.subheader("🧪 테스트 모드 설정")
             col1, col2 = st.columns(2)
+            
             with col1:
-                st.markdown("#### 📈 트래픽 사용량")
-                traffic_usage = autopilot_status["total_traffic_usage"]
-                max_traffic = autopilot_status["max_traffic_usage"]
-                st.progress(traffic_usage / max_traffic)
-                st.caption(f"현재: {traffic_usage:.1%} / 최대: {max_traffic:.1%}")
-                
-                st.markdown("#### ⚙️ 설정 정보")
-                st.markdown(f"**최대 동시 실험**: {autopilot_status['max_concurrent_experiments']}개")
-                if autopilot_status.get("next_run"):
-                    st.markdown(f"**다음 실행**: {autopilot_status['next_run'][:19]}")
+                if st.button("🚀 테스트 모드 활성화", type="primary"):
+                    response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/test-mode", params={"enabled": True})
+                    if response.status_code == 200:
+                        st.success("테스트 모드가 활성화되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("테스트 모드 활성화 실패")
             
             with col2:
-                st.markdown("#### 🎯 실험 생성 조건")
-                st.markdown("""
-                - **최소 일일 세션**: 100회 이상
-                - **최소 재고**: 10개 이상  
-                - **쿨다운 기간**: 7일 이상
-                - **트래픽 예산**: 전체의 20% 이하
-                - **동시 실험**: 최대 5개
-                """)
+                if st.button("📊 일반 모드로 복원"):
+                    response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/test-mode", params={"enabled": False})
+                    if response.status_code == 200:
+                        st.success("일반 모드로 복원되었습니다!")
+                        st.rerun()
+                    else:
+                        st.error("모드 변경 실패")
         else:
             st.error("Autopilot 상태를 불러올 수 없습니다.")
+        
     except Exception as e:
-        st.error(f"오류가 발생했습니다: {e}")
+        st.error(f"자동 생성기 로드 중 오류가 발생했습니다: {str(e)}")
     
     st.markdown("---")
     
-    # Autopilot 제어
-    st.subheader("🎮 Autopilot 제어")
-    
+    # 빠른 실행 컨트롤
+    st.subheader("⚡ 빠른 실행 컨트롤")
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("🔄 상태 새로고침", type="secondary"):
-            st.rerun()
+        if st.button("🔄 빠른 사이클 실행", type="secondary"):
+            with st.spinner("빠른 사이클을 실행 중입니다..."):
+                response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/fast-cycle")
+                if response.status_code == 200:
+                    result = response.json()
+                    st.success(f"✅ {result['processed_tests']}개 테스트 처리됨")
+                    st.rerun()
+                else:
+                    st.error("빠른 사이클 실행 실패")
     
     with col2:
-        if st.button("🚀 수동 사이클 실행", type="primary"):
-            try:
+        if st.button("⏰ 시간 가속 (1시간)", type="secondary"):
+            with st.spinner("시간을 가속 중입니다..."):
+                response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/accelerate-time", params={"hours": 1})
+                if response.status_code == 200:
+                    result = response.json()
+                    st.success(f"✅ {result['accelerated_tests']}개 테스트 시간 가속됨")
+                    st.rerun()
+                else:
+                    st.error("시간 가속 실패")
+    
+    with col3:
+        if st.button("🚀 자동 생성 실행", type="secondary"):
+            with st.spinner("자동 생성을 실행 중입니다..."):
                 response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/run-cycle")
                 if response.status_code == 200:
                     result = response.json()
-                    st.success(result["message"])
+                    st.success(f"✅ {result['experiments_created']}개 실험 생성됨")
+                    st.rerun()
                 else:
-                    st.error("수동 사이클 실행에 실패했습니다.")
-            except Exception as e:
-                st.error(f"오류가 발생했습니다: {e}")
+                    st.error("자동 생성 실행 실패")
     
-    with col3:
+    st.markdown("---")
+    
+    # 기존 컨트롤
+    st.subheader("🎛️ 일반 제어")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🔄 자동 생성 사이클 실행"):
+            with st.spinner("자동 생성 사이클을 실행 중입니다..."):
+                response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/run-cycle")
+                if response.status_code == 200:
+                    result = response.json()
+                    st.success(f"✅ {result['experiments_created']}개의 실험이 생성되었습니다.")
+                    st.rerun()
+                else:
+                    st.error("자동 생성 사이클 실행 실패")
+    
+    with col2:
         # 프로모션 모드 토글
-        try:
-            status_response = requests.get(f"{API_BASE_URL}/api/abtest/autopilot/status")
-            if status_response.status_code == 200:
-                status_data = status_response.json()
-                current_promotion_mode = status_data["autopilot_status"]["promotion_mode"]
-                
-                if current_promotion_mode:
-                    if st.button("🟢 프로모션 모드 해제", type="secondary"):
-                        try:
-                            response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/promotion-mode", params={"enabled": False})
-                            if response.status_code == 200:
-                                st.success("프로모션 모드가 해제되었습니다.")
-                                st.rerun()
-                            else:
-                                st.error("프로모션 모드 해제에 실패했습니다.")
-                        except Exception as e:
-                            st.error(f"오류가 발생했습니다: {e}")
+        if status["promotion_mode"]:
+            if st.button("📊 프로모션 모드 비활성화"):
+                response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/promotion-mode", params={"enabled": False})
+                if response.status_code == 200:
+                    st.success("프로모션 모드가 비활성화되었습니다.")
+                    st.rerun()
                 else:
-                    if st.button("🟡 프로모션 모드 활성화", type="secondary"):
-                        try:
-                            response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/promotion-mode", params={"enabled": True})
-                            if response.status_code == 200:
-                                st.success("프로모션 모드가 활성화되었습니다.")
-                                st.rerun()
-                            else:
-                                st.error("프로모션 모드 활성화에 실패했습니다.")
-                        except Exception as e:
-                            st.error(f"오류가 발생했습니다: {e}")
-        except Exception as e:
-            st.error(f"상태 조회 오류: {e}")
-    
-    st.markdown("---")
-    
-    # 자동 생성된 실험 목록
-    st.subheader("🤖 자동 생성된 실험")
-    
-    try:
-        response = requests.get(f"{API_BASE_URL}/api/abtest/list")
-        if response.status_code == 200:
-            data = response.json()
-            tests = data["tests"]
-            
-            # 자동 생성된 실험만 필터링
-            autopilot_tests = [t for t in tests if t.get("test_mode") == "autopilot"]
-            
-            if autopilot_tests:
-                for test in autopilot_tests[-5:]:  # 최근 5개
-                    with st.expander(f"🤖 {test['test_name']} ({test['product_name']})"):
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.markdown(f"**상태**: {test['status']}")
-                            st.markdown(f"**생성일**: {test['created_at'][:10]}")
-                        with col2:
-                            st.markdown(f"**변형 수**: {test['variants_count']}개")
-                            st.markdown(f"**테스트 모드**: {test.get('test_mode', 'manual')}")
-                        with col3:
-                            if test["status"] == "active":
-                                if st.button(f"결과 보기", key=f"autopilot_view_{test['test_id']}"):
-                                    st.session_state.selected_test = test['test_id']
-                                    st.rerun()
-            else:
-                st.info("아직 자동 생성된 실험이 없습니다.")
+                    st.error("프로모션 모드 비활성화 실패")
         else:
-            st.error("테스트 목록을 불러올 수 없습니다.")
-    except Exception as e:
-        st.error(f"오류가 발생했습니다: {e}")
+            if st.button("🎯 프로모션 모드 활성화"):
+                response = requests.post(f"{API_BASE_URL}/api/abtest/autopilot/promotion-mode", params={"enabled": True})
+                if response.status_code == 200:
+                    st.success("프로모션 모드가 활성화되었습니다.")
+                    st.rerun()
+                else:
+                    st.error("프로모션 모드 활성화 실패")
     
+    # 상세 상태 정보
     st.markdown("---")
+    st.subheader("📊 상세 상태 정보")
     
-    # Autopilot 설정 정보
-    st.subheader("⚙️ Autopilot 설정")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("총 테스트 수", status["total_tests_count"])
+        st.metric("자동 사이클 대기열", status["auto_cycle_queue_size"])
+    with col2:
+        st.metric("사이클 관리자", "✅ 실행 중" if status["cycle_manager_running"] else "❌ 중지됨")
+        st.metric("마지막 체크", status["last_check_time"][:19])
     
-    st.markdown("""
-    #### 📅 스케줄 설정
-    - **매일 오전 2시**: 자동 실험 생성 사이클 실행
-    - **매주 월요일 오전 9시**: 주간 실험 생성 사이클 실행
-    
-    #### 🎯 후보 선별 기준
-    - **트래픽**: 일일 세션 100회 이상
-    - **재고**: 10개 이상 보유
-    - **쿨다운**: 마지막 실험 후 7일 이상 경과
-    - **우선순위**: 트래픽, 재고, 카테고리별 점수 계산
-    
-    #### ⚖️ 리소스 관리
-    - **트래픽 예산**: 전체 트래픽의 20% 이하
-    - **동시 실험**: 최대 5개 동시 실행
-    - **SKU당 제한**: 동시 1개 실험만 허용
-    """)
+    # 설정 정보
+    config = status.get("config", {})
+    st.markdown("**설정 정보:**")
+    st.text(f"• 체크 간격: {config.get('check_interval_hours', 'N/A')}시간")
+    st.text(f"• 사이클 체크 간격: {config.get('cycle_check_interval_hours', 'N/A')}시간")
+    st.text(f"• 자동 사이클: {'활성' if config.get('auto_cycle_enabled') else '비활성'}")
 
 def show_experiment_brief():
     """실험 계약서 화면 - 요구사항 1번"""
@@ -1240,124 +1211,295 @@ def show_guardrails():
     except Exception as e:
         st.error(f"오류가 발생했습니다: {e}")
 
-# 실시간 모니터링은 가드레일 모니터링으로 통합됨
+def show_real_time_tracking():
+    """실시간 추적 페이지"""
+    st.header("📊 실시간 추적")
+    
+    # 실시간 추적기 상태 확인
+    try:
+        response = requests.get(f"{API_BASE_URL}/api/abtest/real-time/status")
+        if response.status_code == 200:
+            status = response.json()
+            st.success(f"실시간 추적기 상태: {status['status']}")
+        else:
+            st.warning("실시간 추적기가 비활성화되어 있습니다.")
+    except:
+        st.warning("실시간 추적기에 연결할 수 없습니다.")
+    
+    # 테스트 선택
+    tests = get_test_list()
+    if not tests:
+        st.warning("활성화된 테스트가 없습니다.")
+        return
+    
+    test_options = {f"{test['test_name']} ({test['test_id'][:8]}...)": test['test_id'] for test in tests}
+    selected_test_name = st.selectbox("테스트 선택", list(test_options.keys()))
+    selected_test_id = test_options[selected_test_name]
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("📈 실시간 통계")
+        if st.button("🔄 통계 새로고침"):
+            try:
+                response = requests.get(f"{API_BASE_URL}/api/abtest/real-time/stats/{selected_test_id}")
+                if response.status_code == 200:
+                    stats = response.json()["stats"]
+                    
+                    # 테스트 전체 통계
+                    if "test_stats" in stats:
+                        test_stats = stats["test_stats"]
+                        st.metric("총 이벤트", test_stats.get("total_events", 0))
+                        st.metric("노출 수", test_stats.get("impression_count", 0))
+                        st.metric("클릭 수", test_stats.get("click_count", 0))
+                        st.metric("전환 수", test_stats.get("purchase_count", 0))
+                        if "total_revenue" in test_stats:
+                            st.metric("총 수익", f"₩{float(test_stats['total_revenue']):,.0f}")
+                    
+                    # 변형별 통계
+                    if "variant_stats" in stats:
+                        st.subheader("변형별 통계")
+                        for variant_id, variant_data in stats["variant_stats"].items():
+                            with st.expander(f"변형 {variant_id[:8]}..."):
+                                col_a, col_b, col_c, col_d = st.columns(4)
+                                with col_a:
+                                    st.metric("노출", variant_data.get("impression_count", 0))
+                                with col_b:
+                                    st.metric("클릭", variant_data.get("click_count", 0))
+                                with col_c:
+                                    st.metric("전환", variant_data.get("purchase_count", 0))
+                                with col_d:
+                                    if "total_revenue" in variant_data:
+                                        st.metric("수익", f"₩{float(variant_data['total_revenue']):,.0f}")
+                else:
+                    st.error("실시간 통계를 가져올 수 없습니다.")
+            except Exception as e:
+                st.error(f"오류: {e}")
+    
+    with col2:
+        st.subheader("📋 최근 이벤트")
+        limit = st.slider("이벤트 수", 10, 100, 50)
+        if st.button("🔄 이벤트 새로고침"):
+            try:
+                response = requests.get(f"{API_BASE_URL}/api/abtest/real-time/events/{selected_test_id}?limit={limit}")
+                if response.status_code == 200:
+                    events_data = response.json()
+                    events = events_data["events"]
+                    
+                    if events:
+                        # 이벤트를 테이블로 표시
+                        event_df = []
+                        for event in events:
+                            event_df.append({
+                                "시간": event.get("timestamp", "")[:19],
+                                "이벤트": event.get("event_type", ""),
+                                "사용자": event.get("user_id", "")[:8],
+                                "변형": event.get("variant_id", "")[:8],
+                                "수익": f"₩{event.get('revenue', 0):,.0f}" if event.get("revenue") else "-"
+                            })
+                        
+                        df = pd.DataFrame(event_df)
+                        st.dataframe(df, use_container_width=True)
+                    else:
+                        st.info("최근 이벤트가 없습니다.")
+                else:
+                    st.error("최근 이벤트를 가져올 수 없습니다.")
+            except Exception as e:
+                st.error(f"오류: {e}")
+    
+    # 실시간 이벤트 시뮬레이션
+    st.subheader("🎮 실시간 이벤트 시뮬레이션")
+    
+    col3, col4 = st.columns(2)
+    
+    with col3:
+        event_type = st.selectbox("이벤트 타입", ["impression", "click", "add_to_cart", "purchase"])
+        user_id = st.text_input("사용자 ID", f"user_{int(time.time())}")
+        session_id = st.text_input("세션 ID", f"session_{int(time.time())}")
+        
+        if event_type == "purchase":
+            revenue = st.number_input("수익 (원)", min_value=0, value=100000)
+        else:
+            revenue = None
+    
+    with col4:
+        page_url = st.text_input("페이지 URL", "https://example.com/product/123")
+        user_agent = st.text_input("User Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        ip_address = st.text_input("IP 주소", "192.168.1.1")
+    
+    if st.button("📤 이벤트 전송"):
+        try:
+            # 변형 ID 가져오기
+            response = requests.get(f"{API_BASE_URL}/api/abtest/{selected_test_id}/variant/{user_id}")
+            if response.status_code == 200:
+                variant_id = response.json()["variant"]["variant_id"]
+            else:
+                st.error("변형 ID를 가져올 수 없습니다.")
+                return
+            
+            # 이벤트 데이터 준비
+            event_data = {
+                "test_id": selected_test_id,
+                "variant_id": variant_id,
+                "user_id": user_id,
+                "session_id": session_id,
+                "event_type": event_type,
+                "page_url": page_url,
+                "user_agent": user_agent,
+                "ip_address": ip_address
+            }
+            
+            if revenue:
+                event_data["revenue"] = revenue
+            
+            # 이벤트 전송
+            response = requests.post(f"{API_BASE_URL}/api/abtest/real-time/event", json=event_data)
+            if response.status_code == 200:
+                result = response.json()
+                st.success(f"이벤트가 성공적으로 전송되었습니다! (ID: {result['event_id'][:8]}...)")
+            else:
+                st.error("이벤트 전송에 실패했습니다.")
+        except Exception as e:
+            st.error(f"오류: {e}")
 
-def show_ab_test_simulation():
+def simulation_page():
     """A/B 테스트 시뮬레이션 화면"""
     st.header("🧪 A/B 테스트 시뮬레이션")
-    st.info("실제 사용자 행동을 시뮬레이션하여 A/B 테스트가 제대로 작동하는지 확인할 수 있습니다.")
+    
+    st.markdown("""
+    실제 사용자 행동을 시뮬레이션하여 A/B 테스트가 제대로 작동하는지 확인할 수 있습니다.
+    """)
     
     try:
-        # 활성 테스트 목록 조회
+        # 테스트 목록 조회
         response = requests.get(f"{API_BASE_URL}/api/abtest/list")
         if response.status_code == 200:
             data = response.json()
             tests = data["tests"]
             
-            # 활성 테스트만 필터링
-            active_tests = [t for t in tests if t["status"] == "active"]
-            
-            if not active_tests:
-                st.warning("활성 상태인 테스트가 없습니다. 먼저 테스트를 생성하고 시작해주세요.")
+            if not tests:
+                st.info("시뮬레이션할 테스트가 없습니다. 먼저 테스트를 생성해주세요.")
                 return
             
             # 테스트 선택
-            test_options = {f"{t['test_name']} ({t['product_name']})": t['test_id'] for t in active_tests}
+            test_options = {f"{t['test_name']} ({t['product_name']})": t['test_id'] for t in tests}
             selected_test_name = st.selectbox("시뮬레이션할 테스트 선택", list(test_options.keys()))
             selected_test_id = test_options[selected_test_name]
             
-            st.markdown("---")
-            
-            # 시뮬레이션 설정
             st.subheader("⚙️ 시뮬레이션 설정")
             
+            # 시뮬레이션 설정
             col1, col2 = st.columns(2)
             with col1:
-                user_count = st.number_input("시뮬레이션할 사용자 수", min_value=1, max_value=100, value=10)
+                user_count = st.number_input("시뮬레이션할 사용자 수", min_value=1, max_value=1000, value=10, step=1)
                 impression_rate = st.slider("노출 확률 (%)", 0, 100, 80)
+            
             with col2:
-                click_rate = st.slider("클릭 확률 (%)", 0, 100, 15)
-                conversion_rate = st.slider("구매 확률 (%)", 0, 100, 3)
+                click_rate = st.slider("클릭 확률 (%)", 0, 100, 57)
+                conversion_rate = st.slider("구매 확률 (%)", 0, 100, 36)
             
-            st.markdown("---")
-            
-            # 시뮬레이션 실행
+            # 시뮬레이션 시작 버튼
             if st.button("🚀 시뮬레이션 시작", type="primary"):
                 with st.spinner("시뮬레이션을 실행 중입니다..."):
-                    simulate_user_behavior(selected_test_id, user_count, impression_rate, click_rate, conversion_rate)
-                
-                st.success("✅ 시뮬레이션이 완료되었습니다!")
-                st.rerun()
+                    try:
+                        # 테스트 상태 확인
+                        test_response = requests.get(f"{API_BASE_URL}/api/abtest/{selected_test_id}")
+                        if test_response.status_code != 200:
+                            st.error(f"테스트 정보 조회 실패: {test_response.status_code}")
+                            return
+                        
+                        test_data = test_response.json()
+                        test_status = test_data["test"]["status"]
+                        
+                        if test_status != "active":
+                            st.warning(f"테스트가 활성 상태가 아닙니다. 현재 상태: {test_status}")
+                            if st.button("테스트 시작"):
+                                start_response = requests.post(f"{API_BASE_URL}/api/abtest/action", json={
+                                    "test_id": selected_test_id,
+                                    "action": "start"
+                                })
+                                if start_response.status_code == 200:
+                                    st.success("테스트가 시작되었습니다!")
+                                else:
+                                    st.error("테스트 시작 실패")
+                            return
+                        
+                        # 시뮬레이션 실행
+                        simulate_user_behavior(selected_test_id, user_count, impression_rate, click_rate, conversion_rate)
+                        st.success("✅ 시뮬레이션이 완료되었습니다!")
+                        
+                        # 결과 새로고침 버튼
+                        if st.button("🔄 결과 새로고침"):
+                            st.rerun()
             
-            st.markdown("---")
+                    except Exception as e:
+                        st.error(f"시뮬레이션 중 오류가 발생했습니다: {str(e)}")
+                        st.error(f"오류 상세: {type(e).__name__}")
             
             # 실시간 결과 표시
             st.subheader("📊 실시간 결과")
-            if st.button("🔄 결과 새로고침"):
-                st.rerun()
             
-            # 테스트 결과 조회
-            results_response = requests.get(f"{API_BASE_URL}/api/abtest/{selected_test_id}/results")
-            if results_response.status_code == 200:
-                results_data = results_response.json()
-                results = results_data["results"]
-                
-                # 전체 통계
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("총 노출수", results.get("total_impressions", 0))
-                with col2:
-                    st.metric("총 클릭수", results.get("total_clicks", 0))
-                with col3:
-                    st.metric("총 구매수", results.get("total_conversions", 0))
-                with col4:
-                    total_revenue = results.get("total_revenue", 0)
-                    st.metric("총 매출", f"₩{total_revenue:,}")
-                
-                # 변형별 성과
-                st.subheader("🎯 변형별 성과")
-                variants = results.get("variants", {})
-                
-                if variants:
-                    # 데이터프레임 생성
-                    variant_data = []
-                    for variant_id, variant in variants.items():
-                        variant_data.append({
-                            "변형": variant["variant_type"],
-                            "노출수": variant["impressions"],
-                            "클릭수": variant["clicks"],
-                            "구매수": variant["conversions"],
-                            "CTR (%)": round(variant["ctr"], 2),
-                            "전환율 (%)": round(variant["conversion_rate"], 2),
-                            "매출": f"₩{variant['revenue']:,}",
-                            "승률 (%)": round(variant["win_probability"] * 100, 1)
-                        })
+            try:
+                results_response = requests.get(f"{API_BASE_URL}/api/abtest/{selected_test_id}/results")
+                if results_response.status_code == 200:
+                    results_data = results_response.json()
+                    results = results_data["results"]
                     
-                    df = pd.DataFrame(variant_data)
-                    st.dataframe(df, use_container_width=True)
+                    # 전체 통계
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("총 노출", results['total_impressions'])
+                    with col2:
+                        st.metric("총 클릭", results['total_clicks'])
+                    with col3:
+                        st.metric("총 전환", results['total_conversions'])
+                    with col4:
+                        st.metric("총 수익", f"₩{results['total_revenue']:,.0f}")
                     
-                    # 차트 표시
-                    if len(variant_data) > 1:
-                        st.subheader("📈 성과 차트")
+                    # 변형별 결과
+                    if results['variants']:
+                        st.subheader("📈 변형별 성과")
                         
-                        col1, col2 = st.columns(2)
-                        with col1:
+                        variant_data = []
+                        for variant_id, variant_result in results['variants'].items():
+                            variant_data.append({
+                                '변형': variant_result['variant_type'],
+                                '노출': variant_result['impressions'],
+                                '클릭': variant_result['clicks'],
+                                '전환': variant_result['conversions'],
+                                'CTR (%)': f"{variant_result['ctr']:.2f}",
+                                '전환율 (%)': f"{variant_result['conversion_rate']:.2f}",
+                                '수익 (원)': f"{variant_result['revenue']:,.0f}"
+                            })
+                        
+                        df = pd.DataFrame(variant_data)
+                        st.dataframe(df, use_container_width=True)
+                        
+                        # 차트 표시
+                        if len(variant_data) > 0:
                             # CTR 차트
-                            fig_ctr = px.bar(df, x="변형", y="CTR (%)", title="변형별 CTR 비교")
+                            fig_ctr = px.bar(df, x='변형', y='CTR (%)', title='변형별 CTR 비교')
                             st.plotly_chart(fig_ctr, use_container_width=True)
                         
-                        with col2:
                             # 전환율 차트
-                            fig_conv = px.bar(df, x="변형", y="전환율 (%)", title="변형별 전환율 비교")
+                            fig_conv = px.bar(df, x='변형', y='전환율 (%)', title='변형별 전환율 비교')
                             st.plotly_chart(fig_conv, use_container_width=True)
+                    else:
+                        st.info("아직 변형 데이터가 없습니다.")
                 else:
-                    st.info("아직 변형 데이터가 없습니다.")
-            else:
-                st.error("테스트 결과를 불러올 수 없습니다.")
+                    st.error(f"테스트 결과를 불러올 수 없습니다. 상태 코드: {results_response.status_code}")
+                    if results_response.text:
+                        st.error(f"응답 내용: {results_response.text}")
+            except Exception as e:
+                st.error(f"결과 조회 중 오류가 발생했습니다: {str(e)}")
+                
         else:
-            st.error("테스트 목록을 불러올 수 없습니다.")
+            st.error(f"테스트 목록을 불러올 수 없습니다. 상태 코드: {response.status_code}")
+            if response.text:
+                st.error(f"응답 내용: {response.text}")
     except Exception as e:
-        st.error(f"오류가 발생했습니다: {e}")
+        st.error(f"시뮬레이션 페이지 로드 중 오류가 발생했습니다: {str(e)}")
+        st.error(f"오류 타입: {type(e).__name__}")
 
 def simulate_user_behavior(test_id, user_count, impression_rate, click_rate, conversion_rate):
     """사용자 행동 시뮬레이션 (가드레일 지표 포함)"""
@@ -1477,6 +1619,19 @@ def simulate_user_behavior(test_id, user_count, impression_rate, click_rate, con
     st.info(f"  - 봇 트래픽: {guardrail_violations['bot_traffic']}건")
     st.info(f"  - 이상치 행동: {guardrail_violations['outlier_behavior']}건")
     st.info(f"  - 성능 이슈: {guardrail_violations['performance_issues']}건")
+
+def get_test_list():
+    """테스트 목록을 가져오는 유틸리티 함수"""
+    try:
+        response = requests.get(f"{API_BASE_URL}/api/abtest/list")
+        if response.status_code == 200:
+            return response.json()["tests"]
+        else:
+            st.error(f"테스트 목록을 불러올 수 없습니다. 상태 코드: {response.status_code}")
+            return []
+    except Exception as e:
+        st.error(f"오류가 발생했습니다: {e}")
+        return []
 
 if __name__ == "__main__":
     main()

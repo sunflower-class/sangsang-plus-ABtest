@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A/B 테스트 상품 페이지</title>
+    
+    <!-- A/B 테스트 ID 설정 -->
+    <meta name="ab-test-id" content="your-test-id-here">
+    <meta name="product-id" content="prod-123">
+    <meta name="product-price" content="150000">
+    
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .product-container {
+            display: flex;
+            gap: 40px;
+            margin-top: 20px;
+        }
+        
+        .product-image {
+            flex: 1;
+            max-width: 500px;
+        }
+        
+        .product-image img {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+        
+        .product-info {
+            flex: 1;
+        }
+        
+        .product-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .product-price {
+            font-size: 28px;
+            color: #e74c3c;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        
+        .product-description {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #2980b9;
+        }
+        
+        .btn-secondary {
+            background-color: #95a5a6;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #7f8c8d;
+        }
+        
+        .btn-success {
+            background-color: #27ae60;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background-color: #229954;
+        }
+        
+        .features {
+            margin-top: 30px;
+        }
+        
+        .feature-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .feature-icon {
+            margin-right: 10px;
+            color: #27ae60;
+        }
+        
+        .reviews {
+            margin-top: 30px;
+        }
+        
+        .review-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+        }
+        
+        .review-author {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .review-rating {
+            color: #f39c12;
+            margin-bottom: 5px;
+        }
+        
+        .review-text {
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🛍️ 온라인 쇼핑몰</h1>
+        <nav>
+            <a href="#" class="nav-link">홈</a> |
+            <a href="#" class="nav-link">카테고리</a> |
+            <a href="#" class="nav-link">장바구니</a> |
+            <a href="#" class="nav-link">마이페이지</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="product-container">
+            <div class="product-image">
+                <img src="https://via.placeholder.com/500x400/3498db/ffffff?text=상품+이미지" alt="상품 이미지">
+            </div>
+            
+            <div class="product-info">
+                <h2 class="product-title">프리미엄 스마트폰</h2>
+                <div class="product-price" data-price="150000">₩150,000</div>
+                
+                <p class="product-description">
+                    최신 기술이 적용된 프리미엄 스마트폰입니다. 
+                    고성능 카메라, 긴 배터리 수명, 빠른 충전 기능을 제공합니다.
+                </p>
+                
+                <div class="button-group">
+                    <button class="btn btn-primary" id="add-to-cart-btn">🛒 장바구니 추가</button>
+                    <button class="btn btn-secondary" id="wishlist-btn">❤️ 위시리스트</button>
+                    <button class="btn btn-success" id="buy-now-btn">💳 바로 구매</button>
+                </div>
+                
+                <div class="features">
+                    <h3>주요 특징</h3>
+                    <div class="feature-item">
+                        <span class="feature-icon">✓</span>
+                        <span>6.7인치 OLED 디스플레이</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">✓</span>
+                        <span>48MP 메인 카메라</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">✓</span>
+                        <span>5000mAh 배터리</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">✓</span>
+                        <span>25W 고속 충전</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="reviews">
+            <h3>고객 리뷰</h3>
+            <div class="review-item">
+                <div class="review-author">김철수</div>
+                <div class="review-rating">★★★★★</div>
+                <div class="review-text">카메라 성능이 정말 좋습니다. 배터리도 오래가고 만족스러워요!</div>
+            </div>
+            <div class="review-item">
+                <div class="review-author">이영희</div>
+                <div class="review-rating">★★★★☆</div>
+                <div class="review-text">디자인이 예쁘고 성능도 좋습니다. 다만 가격이 조금 비싸네요.</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- A/B 테스트 추적 스크립트 -->
+    <script src="real_service_integration.js"></script>
+    <script>
+        // A/B 테스트 추적기 초기화
+        const tracker = new ABTestTracker({
+            apiUrl: 'http://localhost:5001',
+            testId: 'your-test-id-here' // 실제 테스트 ID로 변경
+        });
+        
+        // 버튼 클릭 이벤트 처리
+        document.getElementById('add-to-cart-btn').addEventListener('click', function() {
+            // 장바구니 추가 로직
+            console.log('장바구니에 추가되었습니다.');
+            
+            // A/B 테스트 이벤트 기록
+            tracker.recordAddToCart({
+                product_id: 'prod-123',
+                product_price: 150000,
+                product_name: '프리미엄 스마트폰'
+            });
+            
+            alert('장바구니에 추가되었습니다!');
+        });
+        
+        document.getElementById('wishlist-btn').addEventListener('click', function() {
+            // 위시리스트 추가 로직
+            console.log('위시리스트에 추가되었습니다.');
+            
+            // A/B 테스트 이벤트 기록
+            tracker.trackCustomEvent('wishlist_add', {
+                product_id: 'prod-123',
+                product_price: 150000
+            });
+            
+            alert('위시리스트에 추가되었습니다!');
+        });
+        
+        document.getElementById('buy-now-btn').addEventListener('click', function() {
+            // 바로 구매 로직
+            console.log('바로 구매 페이지로 이동합니다.');
+            
+            // A/B 테스트 이벤트 기록
+            tracker.recordClick('buy_now_click', {
+                product_id: 'prod-123',
+                product_price: 150000
+            });
+            
+            // 구매 페이지로 이동 (실제 구현에서는 결제 페이지로 이동)
+            window.location.href = '/checkout?product_id=prod-123&price=150000';
+        });
+        
+        // 네비게이션 링크 클릭 추적
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                tracker.recordClick('navigation_click', {
+                    link_text: this.textContent,
+                    link_url: this.href
+                });
+            });
+        });
+        
+        // 페이지 스크롤 추적
+        let scrollTracked = false;
+        window.addEventListener('scroll', function() {
+            if (!scrollTracked && window.scrollY > 100) {
+                tracker.trackCustomEvent('page_scroll', {
+                    scroll_depth: '100px'
+                });
+                scrollTracked = true;
+            }
+        });
+        
+        // 페이지 체류 시간 추적
+        let startTime = Date.now();
+        window.addEventListener('beforeunload', function() {
+            const timeSpent = Date.now() - startTime;
+            tracker.trackCustomEvent('page_exit', {
+                time_spent_ms: timeSpent,
+                time_spent_seconds: Math.round(timeSpent / 1000)
+            });
+        });
+    </script>
+</body>
+</html>
+
