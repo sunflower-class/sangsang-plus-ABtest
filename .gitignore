@@ -61,6 +61,19 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
+# A/B Test Project specific
+abtest.db
+abtest.db-journal
+*.db
+*.db-journal
+alembic_temp/
+venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+.env.production
+
 # Flask stuff:
 instance/
 .webassets-cache

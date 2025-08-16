@@ -59,7 +59,10 @@ def consume_messages():
 # --- Lifespan 이벤트 핸들러 ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # ... (기존 코드와 동일) ...
+    # A/B 테스트 스케줄러 시작
+    from scheduler import scheduler
+    print("A/B 테스트 스케줄러 시작...")
+    
     if MODE != "development":
         print("Connecting to Kafka...")
         try:
@@ -79,6 +82,10 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    # A/B 테스트 스케줄러 중지
+    print("A/B 테스트 스케줄러 중지...")
+    scheduler.stop()
+    
     if MODE != "development" and app.state.producer:
         print("Application shutdown: Flushing final messages...")
         app.state.producer.flush()
@@ -89,9 +96,14 @@ async def lifespan(app: FastAPI):
 # --- FastAPI 앱 생성 ---
 app = FastAPI(
     lifespan=lifespan,
-    title="Confluent Kafka FastAPI Example",
-    description="FastAPI application using the confluent-kafka library and lifespan events."
+    title="AI 기반 이커머스 A/B 테스트 플랫폼",
+    description="AI 기반 상세 페이지 자동 생성 및 A/B 테스트 자동화 플랫폼",
+    version="1.0.0"
 )
+
+# A/B 테스트 API 라우터 등록
+from abtest_api import router as abtest_router
+app.include_router(abtest_router)
 
 # --- Kafka 전송 로직을 처리하는 헬퍼 함수 ---
 def handle_kafka_production(producer: Optional[Producer], data: Dict[str, Any]):
