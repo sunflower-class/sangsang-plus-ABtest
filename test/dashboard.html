@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 기반 A/B 테스트 대시보드</title>
+    <link rel="stylesheet" href="dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 AI 기반 A/B 테스트 자동화 플랫폼</h1>
+            <p>실시간 테스트 현황 및 성과 분석</p>
+        </header>
+
+        <div class="dashboard-grid">
+            <!-- 테스트 생성 섹션 -->
+            <div class="card">
+                <h2>🆕 새 테스트 생성</h2>
+                <form id="createTestForm">
+                    <div class="form-group">
+                        <label for="productName">상품명:</label>
+                        <input type="text" id="productName" name="productName" placeholder="테스트할 상품명을 입력하세요" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="testDuration">테스트 기간 (일):</label>
+                        <input type="number" id="testDuration" name="testDuration" value="7" min="1" max="30">
+                    </div>
+                    <button type="submit" class="btn-primary">테스트 시작</button>
+                </form>
+            </div>
+
+            <!-- 현재 테스트 현황 -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2>📊 현재 테스트 현황</h2>
+                    <button onclick="cleanupOldTests()" 
+                            style="background: #f56565; color: white; border: none; padding: 8px 12px; border-radius: 6px; font-size: 0.9rem; cursor: pointer;">
+                        오래된 테스트 정리
+                    </button>
+                </div>
+                <div id="currentTests">
+                    <p>테스트 데이터를 불러오는 중...</p>
+                </div>
+            </div>
+
+            <!-- 성과 지표 -->
+            <div class="card">
+                <h2>📈 성과 지표</h2>
+                <div class="metrics-grid">
+                    <div class="metric">
+                        <span class="metric-value" id="totalTests">0</span>
+                        <span class="metric-label">총 테스트</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-value" id="activeTests">0</span>
+                        <span class="metric-label">활성 테스트</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-value" id="totalInteractions">0</span>
+                        <span class="metric-label">총 상호작용</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-value" id="conversionRate">0%</span>
+                        <span class="metric-label">전환율</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 차트 섹션 -->
+            <div class="card full-width">
+                <h2>📊 성과 비교 차트</h2>
+                <div class="chart-container" style="height: 400px !important; max-height: 400px !important; overflow: hidden;">
+                    <canvas id="performanceChart" style="height: 400px !important; max-height: 400px !important;"></canvas>
+                </div>
+            </div>
+
+            <!-- 최근 테스트 결과 -->
+            <div class="card full-width">
+                <h2>🏆 최근 테스트 결과</h2>
+                <div id="recentResults">
+                    <p>결과 데이터를 불러오는 중...</p>
+                </div>
+            </div>
+
+            <!-- 로그 섹션 -->
+            <div class="card full-width">
+                <h2>📝 실시간 로그</h2>
+                <div id="logs" class="logs-container">
+                    <p>로그를 불러오는 중...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>

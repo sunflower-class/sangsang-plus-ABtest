@@ -8,8 +8,8 @@ from sqlalchemy import func, and_
 import numpy as np
 from scipy import stats
 
-from models import ABTest, Variant, PerformanceLog, TestResult, TestStatus, VariantType, InteractionType
-from schemas import VariantMetrics, ABTestAnalytics, ContentGenerationRequest, ContentGenerationResponse
+from .models import ABTest, Variant, PerformanceLog, TestResult, TestStatus, VariantType, InteractionType
+from .schemas import VariantMetrics, ABTestAnalytics, ContentGenerationRequest, ContentGenerationResponse
 
 logger = logging.getLogger(__name__)
 

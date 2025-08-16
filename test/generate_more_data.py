@@ -16,12 +16,13 @@ def generate_more_data():
     print("📝 더 많은 상호작용 데이터 생성")
     
     # 테스트 목록 조회
-    response = requests.get(f"{BASE_URL}/")
+    response = requests.get(f"{BASE_URL}/list")
     if response.status_code != 200:
         print("❌ 테스트 목록 조회 실패")
         return None
     
-    tests = response.json()["tests"]
+    data = response.json()
+    tests = data.get("tests", []) if isinstance(data, dict) else data
     if not tests:
         print("❌ 생성된 테스트가 없습니다")
         return None
@@ -31,12 +32,13 @@ def generate_more_data():
     test_id = latest_test["id"]
     
     # 버전 목록 조회
-    response = requests.get(f"{BASE_URL}/{test_id}/variants")
+    response = requests.get(f"{BASE_URL}/test/{test_id}/variants")
     if response.status_code != 200:
         print("❌ 버전 목록 조회 실패")
         return None
     
-    variants = response.json()
+    data = response.json()
+    variants = data.get("variants", []) if isinstance(data, dict) else data
     print(f"테스트 ID: {test_id}")
     print(f"버전 수: {len(variants)}")
     
@@ -87,7 +89,7 @@ def check_winner_determination(test_id):
     print(f"\n🏆 승자 결정 확인 (테스트 ID: {test_id})")
     
     # 분석 데이터 확인
-    response = requests.get(f"{BASE_URL}/{test_id}/analytics")
+    response = requests.get(f"{BASE_URL}/test/{test_id}/analytics")
     if response.status_code == 200:
         analytics = response.json()
         print(f"\n📊 최종 분석 결과:")
@@ -105,7 +107,7 @@ def check_winner_determination(test_id):
             print(f"  - 점수: {variant['score']:.4f}")
     
     # 승자 결정
-    response = requests.post(f"{BASE_URL}/{test_id}/determine-winner")
+    response = requests.post(f"{BASE_URL}/test/{test_id}/determine-winner")
     if response.status_code == 200:
         result = response.json()
         print(f"\n🏆 승자 결정 결과:")

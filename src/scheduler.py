@@ -5,9 +5,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.orm import Session
 
-from database import SessionLocal
-from models import ABTest, TestStatus
-from abtest_service import ABTestService
+from .database import SessionLocal
+from .models import ABTest, TestStatus
+from .abtest_service import ABTestService
 
 logger = logging.getLogger(__name__)
 

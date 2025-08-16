@@ -56,18 +56,19 @@ def test_list_ab_tests():
     """A/B 테스트 목록 조회 테스트"""
     print("\n📋 A/B 테스트 목록 조회 테스트")
     
-    response = requests.get(f"{BASE_URL}/")
+    response = requests.get(f"{BASE_URL}/list")
     print_response(response, "A/B 테스트 목록 조회")
     
     if response.status_code == 200:
-        return response.json()["tests"]
+        data = response.json()
+        return data.get("tests", []) if isinstance(data, dict) else data
     return []
 
 def test_get_ab_test(test_id):
     """특정 A/B 테스트 조회 테스트"""
     print(f"\n🔍 A/B 테스트 {test_id} 조회 테스트")
     
-    response = requests.get(f"{BASE_URL}/{test_id}")
+    response = requests.get(f"{BASE_URL}/test/{test_id}")
     print_response(response, f"A/B 테스트 {test_id} 조회")
     
     return response.status_code == 200
@@ -76,18 +77,19 @@ def test_get_variants(test_id):
     """버전 목록 조회 테스트"""
     print(f"\n📊 A/B 테스트 {test_id} 버전 목록 조회 테스트")
     
-    response = requests.get(f"{BASE_URL}/{test_id}/variants")
+    response = requests.get(f"{BASE_URL}/test/{test_id}/variants")
     print_response(response, f"A/B 테스트 {test_id} 버전 목록")
     
     if response.status_code == 200:
-        return response.json()
+        data = response.json()
+        return data.get("variants", []) if isinstance(data, dict) else data
     return []
 
 def test_start_ab_test(test_id):
     """A/B 테스트 시작 테스트"""
     print(f"\n🚀 A/B 테스트 {test_id} 시작 테스트")
     
-    response = requests.post(f"{BASE_URL}/{test_id}/start")
+    response = requests.post(f"{BASE_URL}/test/{test_id}/start")
     print_response(response, f"A/B 테스트 {test_id} 시작")
     
     return response.status_code == 200
@@ -138,7 +140,7 @@ def test_get_analytics(test_id):
     """분석 데이터 조회 테스트"""
     print(f"\n📈 A/B 테스트 {test_id} 분석 데이터 조회 테스트")
     
-    response = requests.get(f"{BASE_URL}/{test_id}/analytics")
+    response = requests.get(f"{BASE_URL}/test/{test_id}/analytics")
     print_response(response, f"A/B 테스트 {test_id} 분석 데이터")
     
     return response.status_code == 200
@@ -147,7 +149,7 @@ def test_determine_winner(test_id):
     """승자 결정 테스트"""
     print(f"\n🏆 A/B 테스트 {test_id} 승자 결정 테스트")
     
-    response = requests.post(f"{BASE_URL}/{test_id}/determine-winner")
+    response = requests.post(f"{BASE_URL}/test/{test_id}/determine-winner")
     print_response(response, f"A/B 테스트 {test_id} 승자 결정")
     
     return response.status_code == 200
@@ -156,7 +158,7 @@ def test_start_next_round(test_id):
     """다음 라운드 시작 테스트"""
     print(f"\n🔄 A/B 테스트 {test_id} 다음 라운드 시작 테스트")
     
-    response = requests.post(f"{BASE_URL}/{test_id}/next-round")
+    response = requests.post(f"{BASE_URL}/test/{test_id}/next-round")
     print_response(response, f"A/B 테스트 {test_id} 다음 라운드 시작")
     
     return response.status_code == 200
@@ -174,7 +176,7 @@ def test_get_results(test_id):
     """테스트 결과 조회 테스트"""
     print(f"\n📋 A/B 테스트 {test_id} 결과 조회 테스트")
     
-    response = requests.get(f"{BASE_URL}/{test_id}/results")
+    response = requests.get(f"{BASE_URL}/test/{test_id}/results")
     print_response(response, f"A/B 테스트 {test_id} 결과")
     
     return response.status_code == 200

@@ -13,12 +13,13 @@ def check_analytics():
     print("📊 현재 A/B 테스트 분석 데이터 확인")
     
     # 테스트 목록 조회
-    response = requests.get(f"{BASE_URL}/")
+    response = requests.get(f"{BASE_URL}/list")
     if response.status_code != 200:
         print("❌ 테스트 목록 조회 실패")
         return
     
-    tests = response.json()["tests"]
+    data = response.json()
+    tests = data.get("tests", []) if isinstance(data, dict) else data
     if not tests:
         print("❌ 생성된 테스트가 없습니다")
         return

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
-from models import TestStatus, VariantType, InteractionType
+from .models import TestStatus, VariantType, InteractionType
 
 # --- A/B 테스트 관련 스키마 ---
 

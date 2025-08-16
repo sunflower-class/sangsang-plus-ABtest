@@ -6,6 +6,8 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from confluent_kafka import Producer, Consumer, KafkaException
 
 # --- 설정 (변경 없음) ---
@@ -60,7 +62,7 @@ def consume_messages():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # A/B 테스트 스케줄러 시작
-    from scheduler import scheduler
+    from .scheduler import scheduler
     print("A/B 테스트 스케줄러 시작...")
     
     if MODE != "development":
@@ -101,9 +103,13 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# A/B 테스트 API 라우터 등록
-from abtest_api import router as abtest_router
-app.include_router(abtest_router)
+# 정적 파일 서빙 설정
+try:
+    app.mount("/test", StaticFiles(directory="test"), name="test")
+except Exception as e:
+    print(f"Warning: Could not mount static files: {e}")
+
+# A/B 테스트 API 라우터 등록은 엔드포인트 정의 후에 수행
 
 # --- Kafka 전송 로직을 처리하는 헬퍼 함수 ---
 def handle_kafka_production(producer: Optional[Producer], data: Dict[str, Any]):
@@ -143,9 +149,415 @@ def delivery_report(err, msg):
 
 # --- API 엔드포인트 ---
 
+@app.get('/health')
+def health_check():
+    return {"status": "OK", "message": "AI A/B Test Platform is running!"}
+
+@app.get('/analytics/overview')
+def analytics_overview():
+    return {
+        "total_tests": 0,
+        "active_tests": 0,
+        "total_interactions": 0,
+        "conversion_rate": 0.05
+    }
+
+@app.get('/scheduler/status')
+def scheduler_status():
+    return {
+        "status": "running",
+        "jobs": [],
+        "last_run": "2024-01-01T00:00:00Z"
+    }
+
+@app.get('/api/abtest/list')
+def abtest_list():
+    """A/B 테스트 목록 조회"""
+    try:
+        from sqlalchemy.orm import Session
+        from .database import SessionLocal
+        from .models import ABTest, PerformanceLog
+        
+        db = SessionLocal()
+        try:
+            tests = db.query(ABTest).all()
+            
+            result = []
+            for test in tests:
+                # status가 이미 문자열인지 확인
+                status_value = test.status.value if hasattr(test.status, 'value') else str(test.status)
+                
+                # 해당 테스트의 상호작용 데이터 집계
+                interactions = db.query(PerformanceLog).filter(
+                    PerformanceLog.ab_test_id == test.id
+                ).all()
+                
+                total_impressions = len([i for i in interactions if i.interaction_type == 'view'])
+                total_clicks = len([i for i in interactions if i.interaction_type == 'click'])
+                total_purchases = len([i for i in interactions if i.interaction_type == 'purchase'])
+                
+                # A/B 버전별 통계 계산
+                baseline_impressions = len([i for i in interactions if i.interaction_type == 'view' and i.variant_id == 1])
+                baseline_purchases = len([i for i in interactions if i.interaction_type == 'purchase' and i.variant_id == 1])
+                challenger_impressions = len([i for i in interactions if i.interaction_type == 'view' and i.variant_id == 2])
+                challenger_purchases = len([i for i in interactions if i.interaction_type == 'purchase' and i.variant_id == 2])
+                
+                result.append({
+                    "id": test.id,
+                    "name": test.name,
+                    "status": status_value,
+                    "created_at": test.created_at.isoformat(),
+                    "product_id": test.product_id,
+                    "total_impressions": total_impressions,
+                    "total_clicks": total_clicks,
+                    "total_purchases": total_purchases,
+                    "baseline_impressions": baseline_impressions,
+                    "baseline_purchases": baseline_purchases,
+                    "challenger_impressions": challenger_impressions,
+                    "challenger_purchases": challenger_purchases,
+                    "baseline_description": "기존 버전",
+                    "challenger_description": "AI 생성 버전"
+                })
+            
+            print(f"Found {len(result)} tests in database")
+            return {"tests": result}
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"Error in abtest_list: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+@app.get('/api/abtest/results')
+def abtest_results():
+    """A/B 테스트 결과 조회"""
+    try:
+        from sqlalchemy.orm import Session
+        from .database import SessionLocal
+        from .models import TestResult
+        
+        db = SessionLocal()
+        try:
+            results = db.query(TestResult).all()
+            
+            result = []
+            for res in results:
+                result.append({
+                    "id": res.id,
+                    "test_id": res.ab_test_id,
+                    "winner_variant_id": res.winner_variant_id,
+                    "winner_score": float(res.winner_score) if res.winner_score else 0.0,
+                    "total_impressions": res.total_impressions,
+                    "total_clicks": res.total_clicks,
+                    "total_purchases": res.total_purchases,
+                    "total_revenue": float(res.total_revenue) if res.total_revenue else 0.0,
+                    "p_value": float(res.p_value) if res.p_value else 0.0,
+                    "confidence_level": float(res.confidence_level) if res.confidence_level else 0.0,
+                    "created_at": res.created_at.isoformat() if res.created_at else None
+                })
+            
+            print(f"Found {len(result)} results in database")
+            return {"results": result}
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"Error in abtest_results: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+@app.get('/api/abtest/logs')
+def abtest_logs():
+    """A/B 테스트 로그 조회"""
+    try:
+        from sqlalchemy.orm import Session
+        from .database import SessionLocal
+        from .models import PerformanceLog
+        
+        db = SessionLocal()
+        logs = db.query(PerformanceLog).order_by(PerformanceLog.timestamp.desc()).limit(50).all()
+        
+        result = []
+        for log in logs:
+            result.append({
+                "timestamp": log.timestamp.isoformat(),
+                "level": "info",
+                "message": f"상호작용 기록: {log.interaction_type} - 테스트 {log.ab_test_id}"
+            })
+        
+        db.close()
+        return {"logs": result}
+    except Exception as e:
+        print(f"Error in abtest_logs: {e}")
+        return []
+
+@app.get('/api/abtest/analytics/performance')
+def abtest_performance():
+    """A/B 테스트 성과 데이터"""
+    try:
+        from sqlalchemy.orm import Session
+        from .database import SessionLocal
+        from .models import ABTest, PerformanceLog
+        from sqlalchemy import func
+        
+        db = SessionLocal()
+        try:
+            tests = db.query(ABTest).all()
+            
+            result = []
+            for test in tests:
+                # status가 이미 문자열인지 확인
+                status_value = test.status.value if hasattr(test.status, 'value') else str(test.status)
+                
+                # 실제 성과 데이터 계산
+                # 해당 테스트의 상호작용 데이터 집계
+                interactions = db.query(PerformanceLog).filter(
+                    PerformanceLog.ab_test_id == test.id
+                ).all()
+                
+                total_impressions = len([i for i in interactions if i.interaction_type == 'view'])
+                total_clicks = len([i for i in interactions if i.interaction_type == 'click'])
+                total_purchases = len([i for i in interactions if i.interaction_type == 'purchase'])
+                
+                # 전환율과 클릭률 계산
+                click_rate = total_clicks / total_impressions if total_impressions > 0 else 0.0
+                conversion_rate = total_purchases / total_impressions if total_impressions > 0 else 0.0
+                
+                result.append({
+                    "product_name": test.name,
+                    "conversion_rate": round(conversion_rate, 3),
+                    "click_rate": round(click_rate, 3),
+                    "status": status_value,
+                    "impressions": total_impressions,
+                    "clicks": total_clicks,
+                    "purchases": total_purchases
+                })
+            
+            print(f"Found {len(result)} performance data in database")
+            return {"performance": result}
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"Error in abtest_performance: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+@app.get('/api/abtest/interaction')
+def abtest_interaction():
+    """A/B 테스트 상호작용 조회"""
+    return {"status": "success", "interactions": []}
+
+@app.post('/api/abtest/interaction')
+def abtest_interaction_post(interaction: dict):
+    """A/B 테스트 상호작용 기록"""
+    try:
+        from sqlalchemy.orm import Session
+        from .database import SessionLocal
+        from .models import PerformanceLog
+        from datetime import datetime
+        import json
+        
+        db = SessionLocal()
+        try:
+            # variant를 variant_id로 변환 (baseline=1, challenger=2)
+            variant_id = 1 if interaction.get('variant') == 'baseline' else 2
+            
+            # 상호작용 로그 생성
+            log = PerformanceLog(
+                ab_test_id=interaction.get('test_id'),
+                variant_id=variant_id,
+                user_id=f"simulator_{datetime.utcnow().timestamp()}",
+                session_id=f"session_simulator_{interaction.get('test_id')}",
+                interaction_type=interaction.get('interaction_type', 'view'),
+                interaction_metadata=json.dumps(interaction),
+                timestamp=datetime.utcnow()
+            )
+            
+            db.add(log)
+            db.commit()
+            
+            print(f"Interaction logged: {interaction.get('interaction_type')} for test {interaction.get('test_id')} variant {interaction.get('variant')}")
+            return {"status": "success", "log_id": log.id}
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"Error in abtest_interaction_post: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}
+
+@app.post('/api/abtest/test/{test_id}/reset')
+def reset_test_data(test_id: int):
+    """특정 테스트의 상호작용 데이터 초기화"""
+    try:
+        from sqlalchemy.orm import Session
+        from .database import SessionLocal
+        from .models import PerformanceLog
+        
+        db = SessionLocal()
+        try:
+            # 해당 테스트의 모든 PerformanceLog 삭제
+            deleted_count = db.query(PerformanceLog).filter(PerformanceLog.ab_test_id == test_id).delete()
+            db.commit()
+            
+            print(f"Reset test {test_id}: deleted {deleted_count} interaction logs")
+            return {"status": "success", "message": f"테스트 ID {test_id}의 {deleted_count}개 상호작용 데이터가 삭제되었습니다."}
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"Error in reset_test_data: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}
+
+@app.get('/api/abtest/test/{test_id}/variants')
+def get_test_variants(test_id: int):
+    """테스트의 버전 목록 조회"""
+    try:
+        from sqlalchemy.orm import Session
+        from .database import SessionLocal
+        from .models import Variant
+        
+        db = SessionLocal()
+        try:
+            variants = db.query(Variant).filter(Variant.ab_test_id == test_id).all()
+            
+            result = []
+            for variant in variants:
+                result.append({
+                    "id": variant.id,
+                    "name": variant.name,
+                    "content": variant.content,
+                    "is_active": variant.is_active,
+                    "is_winner": variant.is_winner,
+                    "impressions": variant.impressions,
+                    "clicks": variant.clicks,
+                    "purchases": variant.purchases,
+                    "revenue": float(variant.revenue) if variant.revenue else 0.0
+                })
+            
+            print(f"Found {len(result)} variants for test {test_id}")
+            return {"variants": result}
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"Error in get_test_variants: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"variants": []}
+
+@app.delete('/api/abtest/test/{test_id}')
+def delete_test(test_id: int):
+    """테스트 완전 삭제 (테스트와 관련된 모든 데이터 삭제)"""
+    try:
+        from sqlalchemy.orm import Session
+        from .database import SessionLocal
+        from .models import ABTest, PerformanceLog, Variant, TestResult
+        
+        db = SessionLocal()
+        try:
+            # 테스트 존재 확인
+            test = db.query(ABTest).filter(ABTest.id == test_id).first()
+            if not test:
+                return {"status": "error", "message": f"테스트 ID {test_id}를 찾을 수 없습니다."}
+            
+            test_name = test.name
+            
+            # 관련 데이터 삭제 (CASCADE로 자동 삭제됨)
+            # 1. PerformanceLog 삭제
+            deleted_logs = db.query(PerformanceLog).filter(PerformanceLog.ab_test_id == test_id).delete()
+            
+            # 2. TestResult 삭제
+            deleted_results = db.query(TestResult).filter(TestResult.ab_test_id == test_id).delete()
+            
+            # 3. Variant 삭제
+            deleted_variants = db.query(Variant).filter(Variant.ab_test_id == test_id).delete()
+            
+            # 4. ABTest 삭제
+            db.delete(test)
+            
+            db.commit()
+            
+            print(f"Deleted test {test_id} ({test_name}): {deleted_logs} logs, {deleted_results} results, {deleted_variants} variants")
+            return {
+                "status": "success", 
+                "message": f"테스트 '{test_name}' (ID: {test_id})가 완전히 삭제되었습니다.",
+                "deleted_data": {
+                    "logs": deleted_logs,
+                    "results": deleted_results,
+                    "variants": deleted_variants
+                }
+            }
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"Error in delete_test: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}
+
+@app.delete('/api/abtest/cleanup')
+def cleanup_old_tests():
+    """오래된 테스트들 정리 (7일 이상 된 완료된 테스트)"""
+    try:
+        from sqlalchemy.orm import Session
+        from .database import SessionLocal
+        from .models import ABTest
+        from datetime import datetime, timedelta
+        
+        db = SessionLocal()
+        try:
+            # 7일 전 날짜 계산
+            cutoff_date = datetime.utcnow() - timedelta(days=7)
+            
+            # 7일 이상 된 완료된 테스트들 찾기
+            old_tests = db.query(ABTest).filter(
+                ABTest.status == 'completed',
+                ABTest.updated_at < cutoff_date
+            ).all()
+            
+            deleted_count = 0
+            for test in old_tests:
+                # delete_test 함수 재사용
+                result = delete_test(test.id)
+                if result.get("status") == "success":
+                    deleted_count += 1
+            
+            return {
+                "status": "success",
+                "message": f"{deleted_count}개의 오래된 테스트가 정리되었습니다.",
+                "deleted_count": deleted_count
+            }
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"Error in cleanup_old_tests: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}
+
 @app.get('/python')
 def running_test():
     return "python API is running!"
+
+@app.get('/test-db')
+def test_database():
+    """데이터베이스 연결 테스트"""
+    try:
+        from sqlalchemy.orm import Session
+        from .database import SessionLocal
+        from .models import ABTest
+        
+        db = SessionLocal()
+        try:
+            count = db.query(ABTest).count()
+            return {"status": "success", "test_count": count, "message": f"데이터베이스에 {count}개의 테스트가 있습니다"}
+        finally:
+            db.close()
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @app.post("/python/message", status_code=202)
 async def send_message(message_data: Dict[str, Any], request: Request):
@@ -161,6 +573,10 @@ async def health_check(request: Request):
          raise HTTPException(status_code=503, detail="Producer is not available")
     return {"status": "OK"}
 
+
+# A/B 테스트 API 라우터 등록 (엔드포인트 정의 후에 수행)
+from .abtest_api import router as abtest_router
+app.include_router(abtest_router)
 
 # --- 메인 실행 (미사용) ---
 if __name__ == '__main__':
