@@ -298,7 +298,7 @@ def abtest_performance():
     try:
         from sqlalchemy.orm import Session
         from .database import SessionLocal
-        from .models import ABTest, PerformanceLog
+        from .models import ABTest, PerformanceLog, Variant
         from sqlalchemy import func
         
         db = SessionLocal()
@@ -310,28 +310,55 @@ def abtest_performance():
                 # status가 이미 문자열인지 확인
                 status_value = test.status.value if hasattr(test.status, 'value') else str(test.status)
                 
-                # 실제 성과 데이터 계산
                 # 해당 테스트의 상호작용 데이터 집계
                 interactions = db.query(PerformanceLog).filter(
                     PerformanceLog.ab_test_id == test.id
                 ).all()
                 
-                total_impressions = len([i for i in interactions if i.interaction_type == 'view'])
-                total_clicks = len([i for i in interactions if i.interaction_type == 'click'])
-                total_purchases = len([i for i in interactions if i.interaction_type == 'purchase'])
+                # A안과 B안 별도 계산
+                baseline_impressions = len([i for i in interactions if i.interaction_type == 'view' and i.variant_id == 1])
+                baseline_clicks = len([i for i in interactions if i.interaction_type == 'click' and i.variant_id == 1])
+                baseline_purchases = len([i for i in interactions if i.interaction_type == 'purchase' and i.variant_id == 1])
                 
-                # 전환율과 클릭률 계산
-                click_rate = total_clicks / total_impressions if total_impressions > 0 else 0.0
-                conversion_rate = total_purchases / total_impressions if total_impressions > 0 else 0.0
+                challenger_impressions = len([i for i in interactions if i.interaction_type == 'view' and i.variant_id == 2])
+                challenger_clicks = len([i for i in interactions if i.interaction_type == 'click' and i.variant_id == 2])
+                challenger_purchases = len([i for i in interactions if i.interaction_type == 'purchase' and i.variant_id == 2])
+                
+                # A안과 B안 별도 전환율/클릭률 계산
+                baseline_click_rate = baseline_clicks / baseline_impressions if baseline_impressions > 0 else 0.0
+                baseline_conversion_rate = baseline_purchases / baseline_impressions if baseline_impressions > 0 else 0.0
+                
+                challenger_click_rate = challenger_clicks / challenger_impressions if challenger_impressions > 0 else 0.0
+                challenger_conversion_rate = challenger_purchases / challenger_impressions if challenger_impressions > 0 else 0.0
+                
+                # 전체 통계 (참고용)
+                total_impressions = baseline_impressions + challenger_impressions
+                total_clicks = baseline_clicks + challenger_clicks
+                total_purchases = baseline_purchases + challenger_purchases
                 
                 result.append({
                     "product_name": test.name,
-                    "conversion_rate": round(conversion_rate, 3),
-                    "click_rate": round(click_rate, 3),
                     "status": status_value,
-                    "impressions": total_impressions,
-                    "clicks": total_clicks,
-                    "purchases": total_purchases
+                    "test_id": test.id,
+                    # A안 데이터
+                    "baseline_impressions": baseline_impressions,
+                    "baseline_clicks": baseline_clicks,
+                    "baseline_purchases": baseline_purchases,
+                    "baseline_click_rate": round(baseline_click_rate, 3),
+                    "baseline_conversion_rate": round(baseline_conversion_rate, 3),
+                    # B안 데이터
+                    "challenger_impressions": challenger_impressions,
+                    "challenger_clicks": challenger_clicks,
+                    "challenger_purchases": challenger_purchases,
+                    "challenger_click_rate": round(challenger_click_rate, 3),
+                    "challenger_conversion_rate": round(challenger_conversion_rate, 3),
+                    # 전체 데이터 (참고용)
+                    "total_impressions": total_impressions,
+                    "total_clicks": total_clicks,
+                    "total_purchases": total_purchases,
+                    # 승자 정보
+                    "winner": "baseline" if baseline_conversion_rate > challenger_conversion_rate else "challenger" if challenger_conversion_rate > baseline_conversion_rate else "tie",
+                    "improvement_rate": round(((challenger_conversion_rate - baseline_conversion_rate) / baseline_conversion_rate * 100) if baseline_conversion_rate > 0 else 0, 1)
                 })
             
             print(f"Found {len(result)} performance data in database")
@@ -403,6 +430,9 @@ def abtest_interaction_post(interaction: dict):
             
             print(f"Interaction logged: {interaction_type} for test {test_id} variant {variant_type} (ID: {variant_id})")
             return {"status": "success", "log_id": log.id}
+        except Exception as e:
+            db.rollback()
+            raise e
         finally:
             db.close()
     except Exception as e:

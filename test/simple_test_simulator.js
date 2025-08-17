@@ -3,8 +3,8 @@ let simulationState = {
     isRunning: false,
     testId: null,
     stats: {
-        versionA: { views: 0, purchases: 0 },
-        versionB: { views: 0, purchases: 0 }
+        versionA: { views: 0, clicks: 0, purchases: 0 },
+        versionB: { views: 0, clicks: 0, purchases: 0 }
     },
     autoSimulation: null,
     dashboardUpdateInterval: null
@@ -69,6 +69,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if (testSelect) {
         testSelect.addEventListener('change', function() {
             const selectedTestId = this.value;
+            const selectedOption = this.options[this.selectedIndex];
+            
+            // 완료된 테스트는 선택할 수 없음
+            if (selectedOption && selectedOption.disabled) {
+                showNotification('완료된 테스트는 선택할 수 없습니다. 활성 테스트를 선택해주세요.', 'error');
+                this.value = ''; // 선택 해제
+                simulationState.testId = null;
+                return;
+            }
+            
             if (selectedTestId) {
                 loadSelectedTestInfo(selectedTestId);
                 simulationState.testId = parseInt(selectedTestId);
@@ -107,14 +117,27 @@ async function loadTestList() {
                 return;
             }
             
+            let activeTestCount = 0;
+            let completedTestCount = 0;
+            
             tests.forEach(test => {
                 const option = document.createElement('option');
                 option.value = test.id;
-                option.textContent = `${test.name || test.product_name} (ID: ${test.id}) - ${test.status}`;
+                
+                // 완료된 테스트는 비활성화
+                if (test.status === 'completed' || test.status === 'COMPLETED') {
+                    option.disabled = true;
+                    option.textContent = `${test.name || test.product_name} (ID: ${test.id}) - 완료됨 (선택 불가)`;
+                    completedTestCount++;
+                } else {
+                    option.textContent = `${test.name || test.product_name} (ID: ${test.id}) - ${test.status}`;
+                    activeTestCount++;
+                }
+                
                 select.appendChild(option);
             });
             
-            showNotification(`${tests.length}개의 테스트를 불러왔습니다.`, 'info');
+            showNotification(`${activeTestCount}개의 활성 테스트, ${completedTestCount}개의 완료된 테스트를 불러왔습니다.`, 'info');
         } else {
             throw new Error('테스트 목록을 불러올 수 없습니다.');
         }
@@ -207,6 +230,14 @@ function startSimulation() {
             return;
         }
         
+        // 선택된 테스트가 완료된 상태인지 확인
+        const testSelect = document.getElementById('testSelect');
+        const selectedOption = testSelect.options[testSelect.selectedIndex];
+        if (selectedOption && selectedOption.disabled) {
+            showNotification('완료된 테스트는 시뮬레이션할 수 없습니다. 활성 테스트를 선택해주세요.', 'error');
+            return;
+        }
+        
         simulationState.isRunning = true;
         document.querySelector('.btn-start').textContent = '시뮬레이션 중지';
         document.querySelector('.btn-start').classList.add('btn-stop');
@@ -254,7 +285,7 @@ function startAutoSimulation() {
         // 노출 기록
         recordInteraction(version, 'view');
         
-        // 일정 확률로 클릭 시뮬레이션 (30% 확률)
+        // 노출 후 일정 확률로 클릭 시뮬레이션 (30% 확률)
         if (Math.random() < 0.3) {
             setTimeout(() => {
                 recordInteraction(version, 'click');
@@ -267,7 +298,7 @@ function startAutoSimulation() {
                 }
             }, Math.random() * 1000 + 500); // 0.5-1.5초 후 클릭
         }
-    }, 2000); // 2초마다 새로운 방문자
+    }, 4000); // 4초마다 새로운 방문자 (더 현실적인 간격)
 }
 
 // 대시보드 실시간 업데이트 시작
@@ -314,6 +345,30 @@ async function recordInteraction(version, interactionType) {
         return;
     }
     
+    const stats = simulationState.stats[`version${version}`];
+    
+    // 논리적 검증 - 실제 서비스와 동일하게 제한
+    if (interactionType === 'click' && stats.views === 0) {
+        showNotification('노출 없이는 클릭할 수 없습니다. 먼저 노출 버튼을 클릭하세요.', 'warning');
+        return;
+    }
+    
+    if (interactionType === 'purchase' && stats.views === 0) {
+        showNotification('노출 없이는 구매할 수 없습니다. 먼저 노출 버튼을 클릭하세요.', 'warning');
+        return;
+    }
+    
+    // 노출당 1회만 클릭/구매 가능하도록 제한
+    if (interactionType === 'click' && stats.clicks >= stats.views) {
+        showNotification('모든 노출에서 클릭이 완료되었습니다. 더 많은 노출이 필요합니다.', 'warning');
+        return;
+    }
+    
+    if (interactionType === 'purchase' && stats.purchases >= stats.views) {
+        showNotification('모든 노출에서 구매가 완료되었습니다. 더 많은 노출이 필요합니다.', 'warning');
+        return;
+    }
+    
     try {
         const response = await fetch('http://localhost:8000/api/abtest/interaction', {
             method: 'POST',
@@ -332,6 +387,8 @@ async function recordInteraction(version, interactionType) {
             // 로컬 통계 업데이트
             if (interactionType === 'view') {
                 simulationState.stats[`version${version}`].views++;
+            } else if (interactionType === 'click') {
+                simulationState.stats[`version${version}`].clicks++;
             } else if (interactionType === 'purchase') {
                 simulationState.stats[`version${version}`].purchases++;
             }
@@ -341,9 +398,11 @@ async function recordInteraction(version, interactionType) {
             // 상호작용 발생 시 즉시 대시보드 업데이트
             updateDashboardIfOpen();
             
-            // 실시간 알림 (구매 시에만)
+            // 실시간 알림
             if (interactionType === 'purchase') {
                 showNotification(`버전 ${version}에서 구매 발생! (테스트 ID: ${simulationState.testId})`, 'success');
+            } else if (interactionType === 'click') {
+                showNotification(`버전 ${version}에서 클릭 발생!`, 'info');
             }
         } else {
             console.error('상호작용 기록 실패');
@@ -360,12 +419,22 @@ function updateStats() {
     // 기본 통계
     document.getElementById('viewsA').textContent = stats.versionA.views;
     document.getElementById('viewsB').textContent = stats.versionB.views;
+    document.getElementById('clicksA').textContent = stats.versionA.clicks;
+    document.getElementById('clicksB').textContent = stats.versionB.clicks;
     document.getElementById('purchasesA').textContent = stats.versionA.purchases;
     document.getElementById('purchasesB').textContent = stats.versionB.purchases;
     
-    // 전환율 계산
+    // 클릭률 계산 (노출 대비 클릭) - 노출당 클릭 비율
+    const clickRateA = stats.versionA.views > 0 ? (stats.versionA.clicks / stats.versionA.views * 100) : 0;
+    const clickRateB = stats.versionB.views > 0 ? (stats.versionB.clicks / stats.versionB.views * 100) : 0;
+    
+    // 전환율 계산 (노출 대비 구매) - 노출당 구매 비율
     const conversionA = stats.versionA.views > 0 ? (stats.versionA.purchases / stats.versionA.views * 100) : 0;
     const conversionB = stats.versionB.views > 0 ? (stats.versionB.purchases / stats.versionB.views * 100) : 0;
+    
+    // 구매 전환율 계산 (클릭 대비 구매) - 클릭당 구매 비율
+    const purchaseRateA = stats.versionA.clicks > 0 ? (stats.versionA.purchases / stats.versionA.clicks * 100) : 0;
+    const purchaseRateB = stats.versionB.clicks > 0 ? (stats.versionB.purchases / stats.versionB.clicks * 100) : 0;
     
     document.getElementById('conversionA').textContent = `${conversionA.toFixed(2)}%`;
     document.getElementById('conversionB').textContent = `${conversionB.toFixed(2)}%`;
@@ -433,8 +502,8 @@ function resetSimulation() {
     stopSimulation();
     
     simulationState.stats = {
-        versionA: { views: 0, purchases: 0 },
-        versionB: { views: 0, purchases: 0 }
+        versionA: { views: 0, clicks: 0, purchases: 0 },
+        versionB: { views: 0, clicks: 0, purchases: 0 }
     };
     
     updateStats();

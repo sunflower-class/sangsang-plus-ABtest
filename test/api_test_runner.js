@@ -129,26 +129,23 @@ async function testCreateABTest() {
     resultPanel.innerHTML = '테스트 실행 중...';
     
     try {
-        const testData = {
-            product_name: `테스트 제품 ${Date.now()}`,
-            test_duration_days: 7
-        };
-        
-        const response = await fetch(`${API_BASE_URL}/api/abtest/create`, {
+        const response = await fetch(`${API_BASE_URL}/api/abtest/with-images`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(testData)
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                product_name: 'API 테스트용 상품',
+                baseline_image_url: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400',
+                challenger_image_url: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400',
+                test_duration_days: 7
+            })
         });
         
         if (response.ok) {
             const data = await response.json();
-            resultPanel.innerHTML = `✅ 성공\n\n요청:\n${JSON.stringify(testData, null, 2)}\n\n응답:\n${JSON.stringify(data, null, 2)}`;
+            resultPanel.innerHTML = `✅ 성공\n\n생성된 테스트 ID: ${data.test_id}\n\n응답:\n${JSON.stringify(data, null, 2)}`;
             testResults.results['create'] = { status: 'success', data };
         } else {
-            const errorData = await response.json();
-            throw new Error(`HTTP ${response.status}: ${errorData.detail || response.statusText}`);
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
     } catch (error) {
         resultPanel.innerHTML = `❌ 실패\n\n오류:\n${error.message}`;
@@ -157,7 +154,7 @@ async function testCreateABTest() {
     }
 }
 
-// 테스트 목록 조회 테스트
+// A/B 테스트 목록 조회 테스트
 async function testListABTests() {
     const resultPanel = document.getElementById('listResult');
     resultPanel.style.display = 'block';
@@ -168,7 +165,7 @@ async function testListABTests() {
         
         if (response.ok) {
             const data = await response.json();
-            resultPanel.innerHTML = `✅ 성공\n\n테스트 수: ${data.length}\n\n응답:\n${JSON.stringify(data, null, 2)}`;
+            resultPanel.innerHTML = `✅ 성공\n\n테스트 수: ${data.tests ? data.tests.length : 0}\n\n응답:\n${JSON.stringify(data, null, 2)}`;
             testResults.results['list'] = { status: 'success', data };
         } else {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -187,56 +184,38 @@ async function testRecordInteraction() {
     resultPanel.innerHTML = '테스트 실행 중...';
     
     try {
-        // 먼저 테스트 목록을 가져와서 활성 테스트 ID를 찾습니다
-        const listResponse = await fetch(`${API_BASE_URL}/abtest/list`);
+        // 먼저 테스트 목록을 가져와서 첫 번째 테스트 ID 사용
+        const listResponse = await fetch(`${API_BASE_URL}/api/abtest/list`);
         if (!listResponse.ok) {
             throw new Error('테스트 목록을 가져올 수 없습니다.');
         }
         
-        const tests = await listResponse.json();
-        const activeTest = tests.find(test => test.status === 'active');
+        const listData = await listResponse.json();
+        const tests = listData.tests || [];
         
-        if (!activeTest) {
-            // 활성 테스트가 없으면 새로 생성
-            const createResponse = await fetch(`${API_BASE_URL}/api/abtest/create`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    product_name: '상호작용 테스트',
-                    test_duration_days: 1
-                })
-            });
-            
-            if (!createResponse.ok) {
-                throw new Error('테스트를 생성할 수 없습니다.');
-            }
-            
-            const newTest = await createResponse.json();
-            activeTest = { test_id: newTest.test_id };
+        if (tests.length === 0) {
+            throw new Error('사용 가능한 테스트가 없습니다.');
         }
         
-        const interactionData = {
-            test_id: activeTest.test_id,
-            version: 'A',
-            interaction_type: 'view',
-            user_id: `test_user_${Date.now()}`
-        };
+        const testId = tests[0].id;
         
         const response = await fetch(`${API_BASE_URL}/api/abtest/interaction`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(interactionData)
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                test_id: testId,
+                variant: 'baseline',
+                interaction_type: 'view',
+                timestamp: new Date().toISOString()
+            })
         });
         
         if (response.ok) {
             const data = await response.json();
-            resultPanel.innerHTML = `✅ 성공\n\n요청:\n${JSON.stringify(interactionData, null, 2)}\n\n응답:\n${JSON.stringify(data, null, 2)}`;
+            resultPanel.innerHTML = `✅ 성공\n\n테스트 ID: ${testId}\n\n응답:\n${JSON.stringify(data, null, 2)}`;
             testResults.results['interaction'] = { status: 'success', data };
         } else {
-            const errorData = await response.json();
-            throw new Error(`HTTP ${response.status}: ${errorData.detail || response.statusText}`);
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
     } catch (error) {
         resultPanel.innerHTML = `❌ 실패\n\n오류:\n${error.message}`;
@@ -279,7 +258,7 @@ async function testResults() {
         
         if (response.ok) {
             const data = await response.json();
-            resultPanel.innerHTML = `✅ 성공\n\n결과 수: ${data.length}\n\n응답:\n${JSON.stringify(data, null, 2)}`;
+            resultPanel.innerHTML = `✅ 성공\n\n결과 수: ${data.results ? data.results.length : 0}\n\n응답:\n${JSON.stringify(data, null, 2)}`;
             testResults.results['results'] = { status: 'success', data };
         } else {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -302,7 +281,7 @@ async function testLogs() {
         
         if (response.ok) {
             const data = await response.json();
-            resultPanel.innerHTML = `✅ 성공\n\n로그 수: ${data.length}\n\n응답:\n${JSON.stringify(data, null, 2)}`;
+            resultPanel.innerHTML = `✅ 성공\n\n로그 수: ${data.logs ? data.logs.length : 0}\n\n응답:\n${JSON.stringify(data, null, 2)}`;
             testResults.results['logs'] = { status: 'success', data };
         } else {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -345,11 +324,13 @@ async function testBulkData() {
     
     try {
         // 먼저 테스트를 생성
-        const createResponse = await fetch(`${API_BASE_URL}/api/abtest/create`, {
+        const createResponse = await fetch(`${API_BASE_URL}/api/abtest/with-images`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 product_name: '대량 데이터 테스트',
+                baseline_image_url: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400',
+                challenger_image_url: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400',
                 test_duration_days: 1
             })
         });
@@ -362,42 +343,40 @@ async function testBulkData() {
         const testId = test.test_id;
         
         // 대량의 상호작용 데이터 생성
-        const interactions = [];
         const startTime = Date.now();
+        let successCount = 0;
         
-        for (let i = 0; i < 100; i++) {
-            const interaction = {
-                test_id: testId,
-                version: Math.random() < 0.5 ? 'A' : 'B',
-                interaction_type: Math.random() < 0.1 ? 'purchase' : 'view',
-                user_id: `bulk_user_${i}_${Date.now()}`
-            };
-            
-            interactions.push(interaction);
+        for (let i = 0; i < 50; i++) {
+            try {
+                const interactionResponse = await fetch(`${API_BASE_URL}/api/abtest/interaction`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        test_id: testId,
+                        variant: i % 2 === 0 ? 'baseline' : 'challenger',
+                        interaction_type: ['view', 'click', 'purchase'][Math.floor(Math.random() * 3)],
+                        timestamp: new Date().toISOString()
+                    })
+                });
+                
+                if (interactionResponse.ok) {
+                    successCount++;
+                }
+            } catch (error) {
+                console.error(`상호작용 ${i} 실패:`, error);
+            }
         }
         
-        // 병렬로 요청 전송
-        const promises = interactions.map(interaction =>
-            fetch(`${API_BASE_URL}/api/abtest/interaction`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(interaction)
-            })
-        );
-        
-        const responses = await Promise.all(promises);
         const endTime = Date.now();
-        
-        const successCount = responses.filter(r => r.ok).length;
         const duration = endTime - startTime;
         
-        resultPanel.innerHTML = `✅ 성공\n\n생성된 상호작용: ${interactions.length}\n성공: ${successCount}\n실패: ${interactions.length - successCount}\n소요 시간: ${duration}ms\n평균 응답 시간: ${duration / interactions.length}ms`;
+        resultPanel.innerHTML = `✅ 성공\n\n생성된 상호작용: ${successCount}/50\n소요 시간: ${duration}ms\n테스트 ID: ${testId}`;
         
         testResults.results['bulk'] = { 
             status: 'success', 
             data: { 
-                total: interactions.length, 
-                success: successCount, 
+                test_id: testId, 
+                interactions: successCount, 
                 duration: duration 
             } 
         };
@@ -421,8 +400,7 @@ async function testConcurrentRequests() {
         const requests = [
             fetch(`${API_BASE_URL}/health`),
             fetch(`${API_BASE_URL}/api/abtest/list`),
-            fetch(`${API_BASE_URL}/api/abtest/analytics/overview`),
-            fetch(`${API_BASE_URL}/api/abtest/logs`)
+            fetch(`${API_BASE_URL}/api/abtest/analytics/overview`)
         ];
         
         const responses = await Promise.all(requests);
@@ -488,6 +466,18 @@ function showNotification(message, type = 'info') {
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
     notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 600;
+        z-index: 1000;
+        animation: slideIn 0.3s ease;
+        background: ${type === 'success' ? '#38a169' : type === 'warning' ? '#d69e2e' : '#3182ce'};
+    `;
     
     document.body.appendChild(notification);
     

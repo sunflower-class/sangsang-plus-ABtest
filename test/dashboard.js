@@ -539,8 +539,10 @@ function updatePerformanceChart(performanceData) {
     }
     
     const labels = performanceData.map(item => item.product_name);
-    const conversionRates = performanceData.map(item => item.conversion_rate);
-    const clickRates = performanceData.map(item => item.click_rate);
+    const baselineConversionRates = performanceData.map(item => item.baseline_conversion_rate);
+    const challengerConversionRates = performanceData.map(item => item.challenger_conversion_rate);
+    const baselineClickRates = performanceData.map(item => item.baseline_click_rate);
+    const challengerClickRates = performanceData.map(item => item.challenger_click_rate);
     
     performanceChart = new Chart(ctx, {
         type: 'bar',
@@ -548,17 +550,31 @@ function updatePerformanceChart(performanceData) {
             labels: labels,
             datasets: [
                 {
-                    label: '전환율',
-                    data: conversionRates,
+                    label: 'A안 전환율',
+                    data: baselineConversionRates,
                     backgroundColor: 'rgba(54, 162, 235, 0.8)',
                     borderColor: 'rgba(54, 162, 235, 1)',
                     borderWidth: 1
                 },
                 {
-                    label: '클릭률',
-                    data: clickRates,
+                    label: 'B안 전환율',
+                    data: challengerConversionRates,
                     backgroundColor: 'rgba(255, 99, 132, 0.8)',
                     borderColor: 'rgba(255, 99, 132, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'A안 클릭률',
+                    data: baselineClickRates,
+                    backgroundColor: 'rgba(75, 192, 192, 0.8)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'B안 클릭률',
+                    data: challengerClickRates,
+                    backgroundColor: 'rgba(255, 159, 64, 0.8)',
+                    borderColor: 'rgba(255, 159, 64, 1)',
                     borderWidth: 1
                 }
             ]
@@ -579,6 +595,19 @@ function updatePerformanceChart(performanceData) {
             plugins: {
                 legend: {
                     position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + (context.parsed.y * 100).toFixed(1) + '%';
+                        }
+                    }
+                }
+            },
+            // 0값도 표시되도록 설정
+            elements: {
+                bar: {
+                    minBarLength: 2
                 }
             }
         }
@@ -587,32 +616,45 @@ function updatePerformanceChart(performanceData) {
 
 async function loadRecentResults() {
     try {
-        const response = await fetch(`${API_BASE_URL}/results`);
+        const response = await fetch(`${API_BASE_URL}/analytics/performance`);
         const data = await response.json();
         
         const container = document.getElementById('recentResults');
         
-        if (data.results && data.results.length > 0) {
+        if (data.performance && data.performance.length > 0) {
             let html = '<div class="results-list">';
-            data.results.slice(0, 5).forEach(result => {
+            data.performance.slice(0, 5).forEach(result => {
+                const winnerBadge = result.winner === 'baseline' ? '<span class="badge winner">A안 승</span>' : 
+                                  result.winner === 'challenger' ? '<span class="badge winner">B안 승</span>' : 
+                                  '<span class="badge tie">무승부</span>';
+                
                 html += `
                     <div class="result-item">
-                        <h4>테스트 ${result.test_id}</h4>
-                        <p>승자: ${result.winner_variant_id || '미정'}</p>
-                        <p>총 노출: ${result.total_impressions}</p>
-                        <p>총 매출: ${result.total_revenue?.toLocaleString() || 0}원</p>
-                        <p>완료일: ${new Date(result.created_at).toLocaleDateString()}</p>
+                        <h4>${result.product_name} ${winnerBadge}</h4>
+                        <div class="result-comparison">
+                            <div class="variant-stats">
+                                <h5>A안 (기존)</h5>
+                                <p>노출: ${result.baseline_impressions} | 클릭: ${result.baseline_clicks} | 구매: ${result.baseline_purchases}</p>
+                                <p>클릭률: ${(result.baseline_click_rate * 100).toFixed(1)}% | 전환율: ${(result.baseline_conversion_rate * 100).toFixed(1)}%</p>
+                            </div>
+                            <div class="variant-stats">
+                                <h5>B안 (AI)</h5>
+                                <p>노출: ${result.challenger_impressions} | 클릭: ${result.challenger_clicks} | 구매: ${result.challenger_purchases}</p>
+                                <p>클릭률: ${(result.challenger_click_rate * 100).toFixed(1)}% | 전환율: ${(result.challenger_conversion_rate * 100).toFixed(1)}%</p>
+                            </div>
+                        </div>
+                        ${result.improvement_rate !== 0 ? `<p class="improvement">개선율: ${result.improvement_rate > 0 ? '+' : ''}${result.improvement_rate}%</p>` : ''}
                     </div>
                 `;
             });
             html += '</div>';
             container.innerHTML = html;
         } else {
-            container.innerHTML = '<p>최근 테스트 결과가 없습니다.</p>';
+            container.innerHTML = '<p>최근 결과가 없습니다.</p>';
         }
     } catch (error) {
         console.error('최근 결과 로드 실패:', error);
-        document.getElementById('recentResults').innerHTML = '<p>결과 데이터를 불러오는 중 오류가 발생했습니다.</p>';
+        document.getElementById('recentResults').innerHTML = '<p>결과를 불러올 수 없습니다.</p>';
     }
 }
 

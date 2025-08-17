@@ -135,7 +135,7 @@
         
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 20px;
             margin-bottom: 20px;
         }
@@ -221,6 +221,17 @@
                 opacity: 1;
             }
         }
+        
+        /* 비활성화된 옵션 스타일 */
+        select option:disabled {
+            background-color: #f7fafc;
+            color: #a0aec0;
+            font-style: italic;
+        }
+        
+        select option:disabled:hover {
+            background-color: #f7fafc;
+        }
     </style>
 </head>
 <body>
@@ -234,6 +245,9 @@
                     <option value="">테스트를 선택하세요...</option>
                 </select>
                 <button class="control-btn" onclick="loadTestList()" style="background: #667eea; color: white; padding: 8px 12px;">테스트 목록 새로고침</button>
+                <div style="margin-top: 5px; font-size: 0.9rem; color: #718096;">
+                    💡 완료된 테스트는 회색으로 표시되며 선택할 수 없습니다.
+                </div>
             </div>
             <div style="display: flex; gap: 10px; margin-bottom: 15px;">
                 <button class="control-btn btn-start" onclick="startSimulation()">시뮬레이션 시작</button>
@@ -293,7 +307,8 @@
                 </div>
                 <div class="product-price" id="priceA">₩1,200,000</div>
                 <div class="action-buttons">
-                    <button class="btn btn-view" onclick="recordInteraction('A', 'view')">상세보기</button>
+                    <button class="btn btn-view" onclick="recordInteraction('A', 'view')" style="background: #718096;">노출</button>
+                    <button class="btn btn-view" onclick="recordInteraction('A', 'click')">상세보기</button>
                     <button class="btn btn-buy" onclick="recordInteraction('A', 'purchase')">구매하기</button>
                 </div>
             </div>
@@ -308,7 +323,8 @@
                 </div>
                 <div class="product-price" id="priceB">₩1,200,000</div>
                 <div class="action-buttons">
-                    <button class="btn btn-view" onclick="recordInteraction('B', 'view')">상세보기</button>
+                    <button class="btn btn-view" onclick="recordInteraction('B', 'view')" style="background: #718096;">노출</button>
+                    <button class="btn btn-view" onclick="recordInteraction('B', 'click')">상세보기</button>
                     <button class="btn btn-buy" onclick="recordInteraction('B', 'purchase')">구매하기</button>
                 </div>
             </div>
@@ -316,6 +332,9 @@
         
         <div class="stats-panel">
             <h3>📊 실시간 통계</h3>
+            <div style="background: #e6fffa; border: 1px solid #81e6d9; border-radius: 6px; padding: 10px; margin-bottom: 15px; font-size: 0.9rem;">
+                💡 <strong>올바른 플로우:</strong> 노출 → 상세보기 → 구매하기 (노출당 1회씩만 가능)
+            </div>
             <div class="stats-grid">
                 <div class="stat-item">
                     <span class="stat-value" id="viewsA">0</span>
@@ -324,6 +343,14 @@
                 <div class="stat-item">
                     <span class="stat-value" id="viewsB">0</span>
                     <span class="stat-label">버전 B 노출</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="clicksA">0</span>
+                    <span class="stat-label">버전 A 클릭</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="clicksB">0</span>
+                    <span class="stat-label">버전 B 클릭</span>
                 </div>
                 <div class="stat-item">
                     <span class="stat-value" id="purchasesA">0</span>

@@ -664,3 +664,79 @@ header p {
         text-align: center;
     }
 }
+
+/* 결과 비교 스타일 */
+.result-item {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 10px;
+}
+
+.result-item h4 {
+    margin: 0 0 10px 0;
+    color: #2d3748;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.badge.winner {
+    background: #c6f6d5;
+    color: #22543d;
+}
+
+.badge.tie {
+    background: #fef5e7;
+    color: #744210;
+}
+
+.result-comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin: 15px 0;
+}
+
+.variant-stats {
+    background: #f7fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.variant-stats h5 {
+    margin: 0 0 8px 0;
+    color: #4a5568;
+    font-size: 0.9rem;
+}
+
+.variant-stats p {
+    margin: 5px 0;
+    font-size: 0.85rem;
+    color: #718096;
+}
+
+.improvement {
+    margin: 10px 0 0 0;
+    padding: 8px 12px;
+    background: #e6fffa;
+    border-radius: 6px;
+    font-weight: 600;
+    color: #234e52;
+    text-align: center;
+}
+
+@media (max-width: 768px) {
+    .result-comparison {
+        grid-template-columns: 1fr;
+    }
+}
