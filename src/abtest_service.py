@@ -58,6 +58,254 @@ class ABTestService:
             logger.error(f"A/B 테스트 생성 실패: {e}")
             raise
 
+    def create_ab_test_with_images(self, test_data: Dict[str, Any]) -> ABTest:
+        """이미지 URL을 포함한 A/B 테스트 생성"""
+        try:
+            # A/B 테스트 생성
+            ab_test = ABTest(**test_data)
+            self.db.add(ab_test)
+            self.db.flush()
+
+            # 베이스라인 버전 생성 (A안)
+            baseline_content = {
+                "title": f"상세페이지 A안 - {test_data['product_id']}",
+                "image_url": test_data.get('baseline_image_url'),
+                "description": "기존 상세페이지",
+                "generated_at": datetime.utcnow().isoformat()
+            }
+            
+            baseline_variant = Variant(
+                ab_test_id=ab_test.id,
+                variant_type=VariantType.BASELINE,
+                name="A안 (베이스라인)",
+                content=baseline_content,
+                content_hash=self._calculate_content_hash(baseline_content)
+            )
+
+            # 도전자 버전 생성 (B안)
+            challenger_content = {
+                "title": f"상세페이지 B안 - {test_data['product_id']}",
+                "image_url": test_data.get('challenger_image_url'),
+                "description": "개선된 상세페이지",
+                "generated_at": datetime.utcnow().isoformat()
+            }
+            
+            challenger_variant = Variant(
+                ab_test_id=ab_test.id,
+                variant_type=VariantType.CHALLENGER,
+                name="B안 (도전자)",
+                content=challenger_content,
+                content_hash=self._calculate_content_hash(challenger_content)
+            )
+
+            self.db.add_all([baseline_variant, challenger_variant])
+            self.db.commit()
+
+            logger.info(f"이미지 기반 A/B 테스트 생성 완료: {ab_test.id}")
+            return ab_test
+
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"이미지 기반 A/B 테스트 생성 실패: {e}")
+            raise
+
+    def calculate_ai_weights(self, test_id: int) -> Dict[str, float]:
+        """AI가 데이터 기반으로 최적 가중치 계산"""
+        try:
+            # 해당 테스트의 성과 데이터 분석
+            variants = self.db.query(Variant).filter(Variant.ab_test_id == test_id).all()
+            
+            if len(variants) < 2:
+                return {"ctr": 0.3, "cvr": 0.4, "revenue": 0.3}  # 기본값
+            
+            # 각 지표별 성과 분석
+            ctr_values = [v.clicks / max(v.impressions, 1) for v in variants]
+            cvr_values = [v.purchases / max(v.impressions, 1) for v in variants]
+            revenue_values = [v.revenue / max(v.impressions, 1) for v in variants]
+            
+            # 변동성 계산 (높은 변동성 = 높은 가중치)
+            ctr_variance = np.var(ctr_values) if len(ctr_values) > 1 else 0.001
+            cvr_variance = np.var(cvr_values) if len(cvr_values) > 1 else 0.001
+            revenue_variance = np.var(revenue_values) if len(revenue_values) > 1 else 0.001
+            
+            # 가중치 정규화
+            total_variance = ctr_variance + cvr_variance + revenue_variance
+            if total_variance == 0:
+                return {"ctr": 0.3, "cvr": 0.4, "revenue": 0.3}
+            
+            weights = {
+                "ctr": ctr_variance / total_variance,
+                "cvr": cvr_variance / total_variance,
+                "revenue": revenue_variance / total_variance
+            }
+            
+            # 최소 가중치 보장
+            min_weight = 0.1
+            for key in weights:
+                if weights[key] < min_weight:
+                    weights[key] = min_weight
+            
+            # 정규화
+            total = sum(weights.values())
+            weights = {k: v/total for k, v in weights.items()}
+            
+            logger.info(f"AI 가중치 계산 완료: {weights}")
+            return weights
+            
+        except Exception as e:
+            logger.error(f"AI 가중치 계산 실패: {e}")
+            return {"ctr": 0.3, "cvr": 0.4, "revenue": 0.3}
+
+    def calculate_variant_ai_score(self, variant: Variant, weights: Dict[str, float]) -> float:
+        """개별 버전의 AI 점수 계산"""
+        try:
+            # 기본 지표 계산
+            ctr = variant.clicks / max(variant.impressions, 1)
+            cvr = variant.purchases / max(variant.impressions, 1)
+            revenue_per_impression = variant.revenue / max(variant.impressions, 1)
+            
+            # 가드레일 체크
+            if variant.bounce_rate > 0.8:  # 이탈률이 너무 높으면 페널티
+                return 0.0
+            
+            # AI 점수 계산
+            score = (
+                ctr * weights.get("ctr", 0.3) +
+                cvr * weights.get("cvr", 0.4) +
+                revenue_per_impression * weights.get("revenue", 0.3)
+            )
+            
+            # 신뢰도 계산 (샘플 크기 기반)
+            confidence = min(variant.impressions / 1000, 1.0)  # 최대 1000개 기준
+            
+            # 점수 업데이트
+            variant.ai_score = score
+            variant.ai_confidence = confidence
+            
+            return score
+            
+        except Exception as e:
+            logger.error(f"버전 AI 점수 계산 실패: {e}")
+            return 0.0
+
+    def determine_ai_winner(self, test_id: int) -> Optional[int]:
+        """AI가 승자 결정"""
+        try:
+            test = self.db.query(ABTest).filter(ABTest.id == test_id).first()
+            if not test:
+                return None
+            
+            variants = self.db.query(Variant).filter(Variant.ab_test_id == test_id).all()
+            if len(variants) < 2:
+                return None
+            
+            # AI 가중치 계산
+            weights = self.calculate_ai_weights(test_id)
+            
+            # 각 버전의 AI 점수 계산
+            variant_scores = []
+            for variant in variants:
+                score = self.calculate_variant_ai_score(variant, weights)
+                variant_scores.append((variant.id, score, variant.ai_confidence))
+            
+            # 통계적 유의성 검정
+            if len(variant_scores) >= 2:
+                scores = [score for _, score, _ in variant_scores]
+                if len(scores) >= 2:
+                    # t-test로 유의성 검정
+                    try:
+                        t_stat, p_value = stats.ttest_ind([scores[0]], [scores[1]])
+                        significant = p_value < 0.05
+                    except:
+                        significant = False
+                else:
+                    significant = False
+            else:
+                significant = False
+            
+            # 승자 결정 (점수 + 신뢰도 고려)
+            best_variant = max(variant_scores, key=lambda x: x[1] * x[2])
+            winner_id = best_variant[0]
+            
+            # AI 승자 업데이트
+            test.ai_winner_variant_id = winner_id
+            test.status = TestStatus.WAITING_FOR_WINNER_SELECTION
+            test.winner_selection_deadline = datetime.utcnow() + timedelta(days=7)  # 7일 후 마감
+            
+            self.db.commit()
+            
+            logger.info(f"AI 승자 결정 완료: {winner_id}, 유의성: {significant}")
+            return winner_id
+            
+        except Exception as e:
+            logger.error(f"AI 승자 결정 실패: {e}")
+            return None
+
+    def select_winner(self, test_id: int, variant_id: int) -> bool:
+        """사용자가 승자 선택"""
+        try:
+            test = self.db.query(ABTest).filter(ABTest.id == test_id).first()
+            if not test:
+                return False
+            
+            # 승자 선택
+            test.user_selected_winner_id = variant_id
+            test.status = TestStatus.COMPLETED
+            test.ended_at = datetime.utcnow()
+            
+            # 승자 버전 업데이트
+            for variant in test.variants:
+                variant.is_winner = (variant.id == variant_id)
+            
+            self.db.commit()
+            
+            logger.info(f"사용자 승자 선택 완료: {variant_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"사용자 승자 선택 실패: {e}")
+            return False
+
+    def create_next_test_cycle(self, previous_test_id: int, new_challenger_image_url: str) -> Optional[ABTest]:
+        """다음 테스트 사이클 생성"""
+        try:
+            previous_test = self.db.query(ABTest).filter(ABTest.id == previous_test_id).first()
+            if not previous_test or not previous_test.user_selected_winner_id:
+                return None
+            
+            # 승자 버전 가져오기
+            winner_variant = self.db.query(Variant).filter(
+                Variant.id == previous_test.user_selected_winner_id
+            ).first()
+            
+            if not winner_variant:
+                return None
+            
+            # 새로운 테스트 생성
+            new_test_data = {
+                "name": f"{previous_test.name} - 사이클 {previous_test.test_cycle_number + 1}",
+                "description": f"이전 테스트 {previous_test_id}의 연속",
+                "product_id": previous_test.product_id,
+                "test_duration_days": previous_test.test_duration_days,
+                "traffic_split_ratio": previous_test.traffic_split_ratio,
+                "min_sample_size": previous_test.min_sample_size,
+                "weights": previous_test.weights,
+                "guardrail_metrics": previous_test.guardrail_metrics,
+                "test_cycle_number": previous_test.test_cycle_number + 1,
+                "parent_test_id": previous_test_id,
+                "baseline_image_url": winner_variant.content.get("image_url"),  # 이전 승자를 새로운 A안으로
+                "challenger_image_url": new_challenger_image_url  # 새로운 B안
+            }
+            
+            new_test = self.create_ab_test_with_images(new_test_data)
+            
+            logger.info(f"다음 테스트 사이클 생성 완료: {new_test.id}")
+            return new_test
+            
+        except Exception as e:
+            logger.error(f"다음 테스트 사이클 생성 실패: {e}")
+            return None
+
     def _generate_ai_content(self, product_id: str) -> Dict[str, Any]:
         """AI 콘텐츠 생성 API 호출 (실제 구현에서는 외부 AI API 호출)"""
         # 실제 구현에서는 기존 AI 상세 페이지 생성 API를 호출

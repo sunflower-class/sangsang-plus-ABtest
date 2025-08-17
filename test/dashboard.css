@@ -360,3 +360,307 @@ header p {
         opacity: 1;
     }
 }
+
+/* 승자 선택 섹션 스타일 */
+.winner-info {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.winner-info h3 {
+    margin: 0 0 10px 0;
+    font-size: 1.5rem;
+}
+
+.winner-info p {
+    margin: 0;
+    font-size: 1.1rem;
+    opacity: 0.9;
+}
+
+.winner-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.btn-winner {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-width: 120px;
+}
+
+.btn-winner:first-child {
+    background: #48bb78;
+    color: white;
+}
+
+.btn-winner:first-child:hover {
+    background: #38a169;
+    transform: translateY(-2px);
+}
+
+.btn-winner:last-child {
+    background: #ed8936;
+    color: white;
+}
+
+.btn-winner:last-child:hover {
+    background: #dd6b20;
+    transform: translateY(-2px);
+}
+
+/* AI 분석 결과 스타일 */
+.ai-analysis-item {
+    background: #f7fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 10px;
+}
+
+.ai-analysis-item h4 {
+    margin: 0 0 10px 0;
+    color: #2d3748;
+    font-size: 1.1rem;
+}
+
+.ai-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.ai-metric {
+    background: white;
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    text-align: center;
+}
+
+.ai-metric-label {
+    font-size: 0.8rem;
+    color: #718096;
+    margin-bottom: 5px;
+}
+
+.ai-metric-value {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #2d3748;
+}
+
+.ai-score-high {
+    color: #48bb78;
+}
+
+.ai-score-medium {
+    color: #ed8936;
+}
+
+.ai-score-low {
+    color: #f56565;
+}
+
+/* 승자 선택 카드 스타일 */
+#winnerSelectionCard {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+}
+
+#winnerSelectionCard h2 {
+    color: white;
+}
+
+/* 다음 사이클 카드 스타일 */
+#nextCycleCard {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+}
+
+#nextCycleCard h2 {
+    color: white;
+}
+
+#nextCycleCard input {
+    background: rgba(255, 255, 255, 0.9);
+    border: none;
+    color: #2d3748;
+}
+
+#nextCycleCard input::placeholder {
+    color: #718096;
+}
+
+/* 이미지 미리보기 스타일 */
+.image-preview {
+    width: 100%;
+    max-width: 200px;
+    height: 150px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 2px solid #e2e8f0;
+    margin: 10px 0;
+}
+
+.image-preview:hover {
+    border-color: #667eea;
+    transform: scale(1.05);
+    transition: all 0.3s ease;
+}
+
+/* 테스트 상태 표시 */
+.test-status {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-left: 10px;
+}
+
+.status-active {
+    background: #c6f6d5;
+    color: #22543d;
+}
+
+.status-waiting {
+    background: #fef5e7;
+    color: #744210;
+}
+
+.status-completed {
+    background: #e6fffa;
+    color: #234e52;
+}
+
+/* 반응형 디자인 개선 */
+@media (max-width: 768px) {
+    .winner-buttons {
+        flex-direction: column;
+    }
+    
+    .ai-metrics {
+        grid-template-columns: 1fr;
+    }
+    
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* 애니메이션 효과 */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.card {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* 로딩 스피너 */
+.loading {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* 성공/에러 메시지 */
+.message {
+    padding: 12px;
+    border-radius: 6px;
+    margin: 10px 0;
+    font-weight: 500;
+}
+
+.message.success {
+    background: #c6f6d5;
+    color: #22543d;
+    border: 1px solid #9ae6b4;
+}
+
+.message.error {
+    background: #fed7d7;
+    color: #742a2a;
+    border: 1px solid #feb2b2;
+}
+
+.message.info {
+    background: #bee3f8;
+    color: #2a4365;
+    border: 1px solid #90cdf4;
+}
+
+/* 네비게이션 버튼 스타일 */
+.navigation-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+
+.nav-btn {
+    padding: 8px 16px;
+    border: 2px solid #667eea;
+    background: white;
+    color: #667eea;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+}
+
+.nav-btn:hover {
+    background: #667eea;
+    color: white;
+    transform: translateY(-2px);
+}
+
+.nav-btn.active {
+    background: #667eea;
+    color: white;
+}
+
+/* 반응형 네비게이션 */
+@media (max-width: 768px) {
+    .navigation-buttons {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .nav-btn {
+        width: 200px;
+        text-align: center;
+    }
+}

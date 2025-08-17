@@ -235,9 +235,51 @@
                 </select>
                 <button class="control-btn" onclick="loadTestList()" style="background: #667eea; color: white; padding: 8px 12px;">테스트 목록 새로고침</button>
             </div>
-            <button class="control-btn btn-start" onclick="startSimulation()">시뮬레이션 시작</button>
-            <button class="control-btn btn-reset" onclick="resetSimulation()">초기화</button>
-            <button class="control-btn" onclick="resetTestData()" style="background: #e53e3e; color: white;">테스트 데이터 초기화</button>
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <button class="control-btn btn-start" onclick="startSimulation()">시뮬레이션 시작</button>
+                <button class="control-btn btn-reset" onclick="resetSimulation()">초기화</button>
+                <button class="control-btn" onclick="resetTestData()" style="background: #e53e3e; color: white;">테스트 데이터 초기화</button>
+            </div>
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <button class="control-btn" onclick="openDashboard()" style="background: #38a169; color: white;">📊 대시보드 열기</button>
+                <button class="control-btn" onclick="openAIAnalysis()" style="background: #3182ce; color: white;">🧠 AI 분석 보기</button>
+                <button class="control-btn" onclick="openTestHistory()" style="background: #d69e2e; color: white;">📈 테스트 히스토리</button>
+            </div>
+            <div style="background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                <h4 style="margin: 0 0 10px 0; color: #2d3748;">🔄 실시간 상태</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.9rem;">
+                    <div>
+                        <strong>시뮬레이션 상태:</strong> 
+                        <span id="simulationStatus" style="color: #718096;">대기 중</span>
+                    </div>
+                    <div>
+                        <strong>대시보드 연결:</strong> 
+                        <span id="dashboardConnection" style="color: #718096;">확인 중...</span>
+                    </div>
+                    <div>
+                        <strong>마지막 업데이트:</strong> 
+                        <span id="lastUpdate" style="color: #718096;">-</span>
+                    </div>
+                    <div>
+                        <strong>총 상호작용:</strong> 
+                        <span id="totalInteractions" style="color: #718096;">0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                <h4 style="margin: 0 0 10px 0; color: #2d3748;">🖼️ 이미지 정보</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.9rem;">
+                    <div>
+                        <strong>A안 이미지:</strong> 
+                        <span id="imageAUrl" style="color: #718096; word-break: break-all;">-</span>
+                    </div>
+                    <div>
+                        <strong>B안 이미지:</strong> 
+                        <span id="imageBUrl" style="color: #718096; word-break: break-all;">-</span>
+                    </div>
+                </div>
+            </div>
         </div>
         
         <div class="simulator-grid">

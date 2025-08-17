@@ -34,6 +34,192 @@ async def create_ab_test(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"A/B 테스트 생성 실패: {str(e)}")
 
+@router.post("/with-images", response_model=ABTestResponse, status_code=201)
+async def create_ab_test_with_images(
+    test_data: dict,
+    db: Session = Depends(get_db)
+):
+    """이미지 URL을 포함한 A/B 테스트 생성"""
+    try:
+        service = ABTestService(db)
+        
+        # 필수 필드 검증
+        required_fields = ['name', 'product_id', 'baseline_image_url', 'challenger_image_url']
+        for field in required_fields:
+            if field not in test_data:
+                raise HTTPException(status_code=400, detail=f"필수 필드 누락: {field}")
+        
+        # A/B 테스트 생성
+        ab_test = service.create_ab_test_with_images(test_data)
+        
+        return ABTestResponse.from_orm(ab_test)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"이미지 기반 A/B 테스트 생성 실패: {str(e)}")
+
+@router.post("/test/{test_id}/determine-winner")
+async def determine_ai_winner(
+    test_id: int,
+    db: Session = Depends(get_db)
+):
+    """AI가 승자 결정"""
+    try:
+        service = ABTestService(db)
+        
+        winner_id = service.determine_ai_winner(test_id)
+        
+        if winner_id:
+            return {
+                "status": "success",
+                "message": "AI 승자 결정 완료",
+                "ai_winner_id": winner_id,
+                "next_step": "사용자 승자 선택 대기"
+            }
+        else:
+            raise HTTPException(status_code=400, detail="AI 승자 결정 실패")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI 승자 결정 실패: {str(e)}")
+
+@router.post("/test/{test_id}/select-winner/{variant_id}")
+async def select_winner(
+    test_id: int,
+    variant_id: int,
+    db: Session = Depends(get_db)
+):
+    """사용자가 승자 선택"""
+    try:
+        service = ABTestService(db)
+        
+        success = service.select_winner(test_id, variant_id)
+        
+        if success:
+            return {
+                "status": "success",
+                "message": "승자 선택 완료",
+                "selected_winner_id": variant_id,
+                "next_step": "새로운 테스트 사이클 준비"
+            }
+        else:
+            raise HTTPException(status_code=400, detail="승자 선택 실패")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"승자 선택 실패: {str(e)}")
+
+@router.post("/test/{test_id}/next-cycle")
+async def create_next_test_cycle(
+    test_id: int,
+    new_challenger_data: dict,
+    db: Session = Depends(get_db)
+):
+    """다음 테스트 사이클 생성"""
+    try:
+        service = ABTestService(db)
+        
+        if 'challenger_image_url' not in new_challenger_data:
+            raise HTTPException(status_code=400, detail="새로운 B안 이미지 URL이 필요합니다")
+        
+        new_test = service.create_next_test_cycle(
+            test_id, 
+            new_challenger_data['challenger_image_url']
+        )
+        
+        if new_test:
+            return {
+                "status": "success",
+                "message": "다음 테스트 사이클 생성 완료",
+                "new_test_id": new_test.id,
+                "new_test_name": new_test.name
+            }
+        else:
+            raise HTTPException(status_code=400, detail="다음 테스트 사이클 생성 실패")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"다음 테스트 사이클 생성 실패: {str(e)}")
+
+@router.get("/test/{test_id}/winner-status")
+async def get_winner_status(
+    test_id: int,
+    db: Session = Depends(get_db)
+):
+    """승자 결정 상태 조회"""
+    try:
+        test = db.query(ABTest).filter(ABTest.id == test_id).first()
+        if not test:
+            raise HTTPException(status_code=404, detail="테스트를 찾을 수 없습니다")
+        
+        variants = db.query(Variant).filter(Variant.ab_test_id == test_id).all()
+        
+        result = {
+            "test_id": test_id,
+            "status": test.status,
+            "ai_winner_id": test.ai_winner_variant_id,
+            "user_selected_winner_id": test.user_selected_winner_id,
+            "winner_selection_deadline": test.winner_selection_deadline.isoformat() if test.winner_selection_deadline else None,
+            "variants": []
+        }
+        
+        for variant in variants:
+            variant_info = {
+                "id": variant.id,
+                "name": variant.name,
+                "variant_type": variant.variant_type,
+                "ai_score": variant.ai_score,
+                "ai_confidence": variant.ai_confidence,
+                "impressions": variant.impressions,
+                "clicks": variant.clicks,
+                "purchases": variant.purchases,
+                "revenue": variant.revenue,
+                "is_winner": variant.is_winner
+            }
+            result["variants"].append(variant_info)
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"승자 상태 조회 실패: {str(e)}")
+
+@router.get("/test/{test_id}/ai-analysis")
+async def get_ai_analysis(
+    test_id: int,
+    db: Session = Depends(get_db)
+):
+    """AI 분석 결과 조회"""
+    try:
+        service = ABTestService(db)
+        
+        # AI 가중치 계산
+        weights = service.calculate_ai_weights(test_id)
+        
+        # 각 버전의 AI 점수 계산
+        variants = db.query(Variant).filter(Variant.ab_test_id == test_id).all()
+        variant_analysis = []
+        
+        for variant in variants:
+            score = service.calculate_variant_ai_score(variant, weights)
+            analysis = {
+                "variant_id": variant.id,
+                "variant_name": variant.name,
+                "ai_score": score,
+                "ai_confidence": variant.ai_confidence,
+                "ctr": variant.clicks / max(variant.impressions, 1),
+                "cvr": variant.purchases / max(variant.impressions, 1),
+                "revenue_per_impression": variant.revenue / max(variant.impressions, 1),
+                "bounce_rate": variant.bounce_rate,
+                "impressions": variant.impressions
+            }
+            variant_analysis.append(analysis)
+        
+        return {
+            "test_id": test_id,
+            "ai_weights": weights,
+            "variant_analysis": variant_analysis,
+            "recommendation": "AI 분석 결과를 바탕으로 승자를 결정하세요"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI 분석 조회 실패: {str(e)}")
+
 @router.get("/")
 async def list_ab_tests(
     db: Session = Depends(get_db)

@@ -12,22 +12,73 @@
         <header>
             <h1>🤖 AI 기반 A/B 테스트 자동화 플랫폼</h1>
             <p>실시간 테스트 현황 및 성과 분석</p>
+            <div class="navigation-buttons">
+                <button onclick="showAllSections()" class="nav-btn">🏠 전체 보기</button>
+                <button onclick="showCreateTestSection()" class="nav-btn">🆕 새 테스트</button>
+                <button onclick="showAnalysisSection()" class="nav-btn">🧠 AI 분석</button>
+                <button onclick="showHistorySection()" class="nav-btn">📈 히스토리</button>
+                <button onclick="window.open('simple_test_simulator.html', '_blank')" class="nav-btn">🎮 시뮬레이터</button>
+                <button onclick="manualRefresh()" class="nav-btn" style="background: #667eea; color: white;">🔄 새로고침</button>
+            </div>
         </header>
 
         <div class="dashboard-grid">
-            <!-- 테스트 생성 섹션 -->
+            <!-- 이미지 기반 A/B 테스트 생성 섹션 -->
             <div class="card">
-                <h2>🆕 새 테스트 생성</h2>
-                <form id="createTestForm">
+                <h2>🆕 이미지 기반 A/B 테스트 생성</h2>
+                <form id="createImageTestForm">
                     <div class="form-group">
-                        <label for="productName">상품명:</label>
-                        <input type="text" id="productName" name="productName" placeholder="테스트할 상품명을 입력하세요" required>
+                        <label for="testName">테스트 이름:</label>
+                        <input type="text" id="testName" name="testName" placeholder="테스트 이름을 입력하세요" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="productId">상품 ID:</label>
+                        <input type="text" id="productId" name="productId" placeholder="PROD_001" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="baselineImageUrl">A안 이미지 URL:</label>
+                        <input type="url" id="baselineImageUrl" name="baselineImageUrl" placeholder="https://example.com/a-image.jpg" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="challengerImageUrl">B안 이미지 URL:</label>
+                        <input type="url" id="challengerImageUrl" name="challengerImageUrl" placeholder="https://example.com/b-image.jpg" required>
                     </div>
                     <div class="form-group">
                         <label for="testDuration">테스트 기간 (일):</label>
                         <input type="number" id="testDuration" name="testDuration" value="7" min="1" max="30">
                     </div>
-                    <button type="submit" class="btn-primary">테스트 시작</button>
+                    <div class="form-group">
+                        <label for="minSampleSize">최소 샘플 크기:</label>
+                        <input type="number" id="minSampleSize" name="minSampleSize" value="100" min="10" max="10000">
+                    </div>
+                    <button type="submit" class="btn-primary">A/B 테스트 시작</button>
+                </form>
+            </div>
+
+            <!-- 승자 선택 섹션 -->
+            <div class="card" id="winnerSelectionCard" style="display: none;">
+                <h2>🏆 승자 선택</h2>
+                <div id="winnerSelectionContent">
+                    <div class="winner-info">
+                        <h3>AI 승자 결정 완료!</h3>
+                        <p id="aiWinnerInfo">AI가 승자를 결정했습니다. 아래에서 최종 승자를 선택하세요.</p>
+                    </div>
+                    <div class="winner-buttons">
+                        <button id="selectBaselineWinner" class="btn-winner" onclick="selectWinner('baseline')">A안 선택</button>
+                        <button id="selectChallengerWinner" class="btn-winner" onclick="selectWinner('challenger')">B안 선택</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 다음 사이클 생성 섹션 -->
+            <div class="card" id="nextCycleCard" style="display: none;">
+                <h2>🔄 다음 테스트 사이클 생성</h2>
+                <form id="nextCycleForm">
+                    <div class="form-group">
+                        <label for="newChallengerImageUrl">새로운 B안 이미지 URL:</label>
+                        <input type="url" id="newChallengerImageUrl" name="newChallengerImageUrl" placeholder="https://example.com/new-b-image.jpg" required>
+                    </div>
+                    <button type="submit" class="btn-primary">다음 사이클 시작</button>
                 </form>
             </div>
 
@@ -42,6 +93,14 @@
                 </div>
                 <div id="currentTests">
                     <p>테스트 데이터를 불러오는 중...</p>
+                </div>
+            </div>
+
+            <!-- AI 분석 결과 -->
+            <div class="card">
+                <h2>🧠 AI 분석 결과</h2>
+                <div id="aiAnalysis">
+                    <p>AI 분석 데이터를 불러오는 중...</p>
                 </div>
             </div>
 

@@ -24,6 +24,14 @@ class ABTestScheduler:
             name='Check completed A/B tests'
         )
         
+        # 매시간 실행되는 AI 승자 결정 작업 등록
+        self.scheduler.add_job(
+            self._check_ai_winner_determination,
+            CronTrigger(minute=0),
+            id='check_ai_winner_determination',
+            name='Check AI winner determination'
+        )
+        
         logger.info("A/B 테스트 스케줄러가 시작되었습니다")
 
     def _check_completed_tests(self):
@@ -41,27 +49,13 @@ class ABTestScheduler:
                 logger.info(f"완료된 테스트 처리: {test.id} - {test.name}")
                 
                 try:
-                    # 승자 결정
-                    winner_id = service.determine_winner(test.id)
+                    # AI 승자 결정
+                    winner_id = service.determine_ai_winner(test.id)
                     
                     if winner_id:
-                        # 테스트 상태를 완료로 변경
-                        test.status = TestStatus.COMPLETED
-                        test.ended_at = datetime.utcnow()
-                        
-                        # 다음 라운드 자동 시작
-                        success = service.start_next_round(test.id)
-                        
-                        if success:
-                            # 새로운 라운드 시작
-                            test.status = TestStatus.ACTIVE
-                            test.started_at = datetime.utcnow()
-                            test.ended_at = None
-                            logger.info(f"테스트 {test.id}의 다음 라운드가 시작되었습니다")
-                        else:
-                            logger.warning(f"테스트 {test.id}의 다음 라운드 시작에 실패했습니다")
+                        logger.info(f"테스트 {test.id}의 AI 승자 결정 완료: {winner_id}")
                     else:
-                        logger.warning(f"테스트 {test.id}에서 승자를 결정할 수 없습니다")
+                        logger.warning(f"테스트 {test.id}에서 AI 승자를 결정할 수 없습니다")
                         test.status = TestStatus.FAILED
                         test.ended_at = datetime.utcnow()
                     
@@ -74,6 +68,45 @@ class ABTestScheduler:
                     
         except Exception as e:
             logger.error(f"완료된 테스트 확인 중 오류 발생: {e}")
+        finally:
+            db.close()
+
+    def _check_ai_winner_determination(self):
+        """AI 승자 결정이 필요한 테스트 확인"""
+        logger.info("AI 승자 결정 확인 시작")
+        
+        db = SessionLocal()
+        try:
+            service = ABTestService(db)
+            
+            # 충분한 데이터가 있는 활성 테스트들 조회
+            active_tests = db.query(ABTest).filter(
+                ABTest.status == TestStatus.ACTIVE,
+                ABTest.started_at.isnot(None)
+            ).all()
+            
+            for test in active_tests:
+                try:
+                    # 최소 샘플 크기 확인
+                    total_impressions = sum(v.impressions for v in test.variants)
+                    
+                    if total_impressions >= test.min_sample_size:
+                        logger.info(f"테스트 {test.id}의 최소 샘플 크기 달성: {total_impressions}")
+                        
+                        # AI 승자 결정 시도
+                        winner_id = service.determine_ai_winner(test.id)
+                        
+                        if winner_id:
+                            logger.info(f"테스트 {test.id}의 AI 승자 결정 완료: {winner_id}")
+                        else:
+                            logger.info(f"테스트 {test.id}의 AI 승자 결정 보류 (더 많은 데이터 필요)")
+                    
+                except Exception as e:
+                    logger.error(f"테스트 {test.id} AI 승자 결정 중 오류 발생: {e}")
+                    continue
+                    
+        except Exception as e:
+            logger.error(f"AI 승자 결정 확인 중 오류 발생: {e}")
         finally:
             db.close()
 

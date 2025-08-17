@@ -6,8 +6,58 @@ let simulationState = {
         versionA: { views: 0, purchases: 0 },
         versionB: { views: 0, purchases: 0 }
     },
-    autoSimulation: null
+    autoSimulation: null,
+    dashboardUpdateInterval: null
 };
+
+// 실시간 상태 업데이트
+function updateRealTimeStatus() {
+    // 시뮬레이션 상태 업데이트
+    const statusElement = document.getElementById('simulationStatus');
+    if (statusElement) {
+        if (simulationState.isRunning) {
+            statusElement.textContent = '실행 중';
+            statusElement.style.color = '#38a169';
+        } else {
+            statusElement.textContent = '대기 중';
+            statusElement.style.color = '#718096';
+        }
+    }
+    
+    // 총 상호작용 수 업데이트
+    const totalElement = document.getElementById('totalInteractions');
+    if (totalElement) {
+        const total = simulationState.stats.versionA.views + simulationState.stats.versionA.purchases + 
+                     simulationState.stats.versionB.views + simulationState.stats.versionB.purchases;
+        totalElement.textContent = total;
+    }
+    
+    // 마지막 업데이트 시간
+    const lastUpdateElement = document.getElementById('lastUpdate');
+    if (lastUpdateElement) {
+        lastUpdateElement.textContent = new Date().toLocaleTimeString();
+    }
+}
+
+// 대시보드 연결 상태 확인
+function checkDashboardConnection() {
+    const connectionElement = document.getElementById('dashboardConnection');
+    if (connectionElement) {
+        try {
+            // 대시보드가 열려있는지 확인
+            if (window.opener && window.opener.location.href.includes('dashboard.html')) {
+                connectionElement.textContent = '연결됨';
+                connectionElement.style.color = '#38a169';
+            } else {
+                connectionElement.textContent = '연결 안됨';
+                connectionElement.style.color = '#e53e3e';
+            }
+        } catch (error) {
+            connectionElement.textContent = '연결 안됨';
+            connectionElement.style.color = '#e53e3e';
+        }
+    }
+}
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
@@ -21,10 +71,16 @@ document.addEventListener('DOMContentLoaded', function() {
             const selectedTestId = this.value;
             if (selectedTestId) {
                 loadSelectedTestInfo(selectedTestId);
-                simulationState.testId = parseInt(selectedTestId); // 전역 변수에 저장
+                simulationState.testId = parseInt(selectedTestId);
             }
         });
     }
+    
+    // 실시간 상태 업데이트 시작
+    setInterval(() => {
+        updateRealTimeStatus();
+        checkDashboardConnection();
+    }, 1000); // 1초마다 상태 업데이트
     
     showNotification('시뮬레이터가 준비되었습니다. 테스트를 선택하고 "시뮬레이션 시작" 버튼을 클릭하세요.', 'info');
 });
@@ -35,26 +91,22 @@ async function loadTestList() {
         const response = await fetch('http://localhost:8000/api/abtest/list');
         if (response.ok) {
             const data = await response.json();
-            const tests = data.tests || data; // API 응답 형식에 따라 조정
+            const tests = data.tests || data;
             const select = document.getElementById('testSelect');
             
-            // 요소가 존재하는지 확인
             if (!select) {
                 console.error('testSelect 요소를 찾을 수 없습니다.');
                 return;
             }
             
-            // 기존 옵션 제거 (첫 번째 옵션 제외)
             select.innerHTML = '<option value="">테스트를 선택하세요...</option>';
             
-            // tests가 배열인지 확인
             if (!Array.isArray(tests)) {
                 console.error('테스트 데이터가 배열이 아닙니다:', tests);
                 showNotification('테스트 데이터 형식 오류', 'error');
                 return;
             }
             
-            // 테스트 목록 추가
             tests.forEach(test => {
                 const option = document.createElement('option');
                 option.value = test.id;
@@ -72,6 +124,30 @@ async function loadTestList() {
     }
 }
 
+// 이미지 URL 정보 업데이트
+function updateImageInfo(test) {
+    const imageAUrlElement = document.getElementById('imageAUrl');
+    const imageBUrlElement = document.getElementById('imageBUrl');
+    
+    if (imageAUrlElement) {
+        imageAUrlElement.textContent = test.baseline_image_url || '이미지 없음';
+        if (test.baseline_image_url) {
+            imageAUrlElement.style.color = '#38a169';
+        } else {
+            imageAUrlElement.style.color = '#e53e3e';
+        }
+    }
+    
+    if (imageBUrlElement) {
+        imageBUrlElement.textContent = test.challenger_image_url || '이미지 없음';
+        if (test.challenger_image_url) {
+            imageBUrlElement.style.color = '#38a169';
+        } else {
+            imageBUrlElement.style.color = '#e53e3e';
+        }
+    }
+}
+
 // 선택된 테스트 정보 로드
 async function loadSelectedTestInfo(testId) {
     if (!testId) return;
@@ -85,13 +161,33 @@ async function loadSelectedTestInfo(testId) {
             document.getElementById('titleA').textContent = test.product_name || '상품 A';
             document.getElementById('titleB').textContent = test.product_name || '상품 B';
             
-            // 버전별 설명 업데이트 (실제로는 AI 생성된 내용이어야 함)
+            // 버전별 설명 업데이트
             document.getElementById('descA').textContent = test.baseline_description || '기존 버전의 상품 설명입니다.';
             document.getElementById('descB').textContent = test.challenger_description || 'AI가 생성한 새로운 버전의 상품 설명입니다.';
             
             // 가격 정보 업데이트
             document.getElementById('priceA').textContent = `₩${test.baseline_price || '1,200,000'}`;
             document.getElementById('priceB').textContent = `₩${test.challenger_price || '1,200,000'}`;
+            
+            // 이미지 URL 정보 업데이트
+            updateImageInfo(test);
+            
+            // 실제 이미지 URL 설정
+            if (test.baseline_image_url) {
+                const imageA = document.querySelector('#versionA .product-image');
+                imageA.innerHTML = `<img src="${test.baseline_image_url}" alt="A안 이미지" style="width: 100%; height: 100%; object-fit: cover; border-radius: 10px;" onerror="this.parentElement.innerHTML='📱';">`;
+            } else {
+                const imageA = document.querySelector('#versionA .product-image');
+                imageA.innerHTML = '📱';
+            }
+            
+            if (test.challenger_image_url) {
+                const imageB = document.querySelector('#versionB .product-image');
+                imageB.innerHTML = `<img src="${test.challenger_image_url}" alt="B안 이미지" style="width: 100%; height: 100%; object-fit: cover; border-radius: 10px;" onerror="this.parentElement.innerHTML='📱';">`;
+            } else {
+                const imageB = document.querySelector('#versionB .product-image');
+                imageB.innerHTML = '📱';
+            }
             
             showNotification(`테스트 "${test.name || test.product_name}" 정보를 로드했습니다.`, 'info');
         }
@@ -101,50 +197,50 @@ async function loadSelectedTestInfo(testId) {
     }
 }
 
-// 시뮬레이션 시작
-async function startSimulation() {
+// 시뮬레이션 시작/중지 토글
+function startSimulation() {
     if (simulationState.isRunning) {
-        showNotification('시뮬레이션이 이미 실행 중입니다.', 'info');
-        return;
-    }
-    
-    // 선택된 테스트 확인
-    const selectedTestId = document.getElementById('testSelect').value;
-    if (!selectedTestId) {
-        showNotification('시뮬레이션할 테스트를 선택해주세요.', 'error');
-        return;
-    }
-    
-    try {
-        simulationState.testId = parseInt(selectedTestId);
-        simulationState.isRunning = true;
-        
-        // 선택된 테스트 정보 가져오기
-        const listResponse = await fetch('http://localhost:8000/api/abtest/list');
-        if (listResponse.ok) {
-            const data = await listResponse.json();
-            const tests = data.tests || data; // API 응답 형식에 따라 조정
-            const selectedTest = tests.find(test => test.id === simulationState.testId);
-            
-            if (selectedTest) {
-                showNotification(`시뮬레이션이 시작되었습니다! (테스트: ${selectedTest.name}, ID: ${simulationState.testId})`, 'success');
-                
-                // 자동 시뮬레이션 시작
-                startAutoSimulation();
-                
-                // 버튼 상태 변경
-                document.querySelector('.btn-start').textContent = '시뮬레이션 중...';
-                document.querySelector('.btn-start').disabled = true;
-            } else {
-                throw new Error('선택된 테스트를 찾을 수 없습니다');
-            }
-        } else {
-            throw new Error('테스트 목록 조회 실패');
+        stopSimulation();
+    } else {
+        if (!simulationState.testId) {
+            showNotification('먼저 테스트를 선택해주세요.', 'error');
+            return;
         }
-    } catch (error) {
-        console.error('시뮬레이션 시작 오류:', error);
-        showNotification('시뮬레이션 시작 중 오류가 발생했습니다.', 'error');
+        
+        simulationState.isRunning = true;
+        document.querySelector('.btn-start').textContent = '시뮬레이션 중지';
+        document.querySelector('.btn-start').classList.add('btn-stop');
+        
+        startAutoSimulation();
+        startDashboardUpdates();
+        
+        // 실시간 상태 업데이트
+        updateRealTimeStatus();
+        
+        showNotification('시뮬레이션이 시작되었습니다! 실시간으로 데이터가 생성되고 대시보드에 반영됩니다.', 'success');
     }
+}
+
+// 시뮬레이션 중지
+function stopSimulation() {
+    simulationState.isRunning = false;
+    document.querySelector('.btn-start').textContent = '시뮬레이션 시작';
+    document.querySelector('.btn-start').classList.remove('btn-stop');
+    
+    if (simulationState.autoSimulation) {
+        clearInterval(simulationState.autoSimulation);
+        simulationState.autoSimulation = null;
+    }
+    
+    if (simulationState.dashboardUpdateInterval) {
+        clearInterval(simulationState.dashboardUpdateInterval);
+        simulationState.dashboardUpdateInterval = null;
+    }
+    
+    // 실시간 상태 업데이트
+    updateRealTimeStatus();
+    
+    showNotification('시뮬레이션이 중지되었습니다.', 'info');
 }
 
 // 자동 시뮬레이션
@@ -172,6 +268,43 @@ function startAutoSimulation() {
             }, Math.random() * 1000 + 500); // 0.5-1.5초 후 클릭
         }
     }, 2000); // 2초마다 새로운 방문자
+}
+
+// 대시보드 실시간 업데이트 시작
+function startDashboardUpdates() {
+    simulationState.dashboardUpdateInterval = setInterval(() => {
+        if (!simulationState.isRunning) return;
+        
+        // 대시보드가 열려있다면 실시간 업데이트
+        updateDashboardIfOpen();
+    }, 2000); // 2초마다 대시보드 업데이트 (기존 5초에서 단축)
+}
+
+// 대시보드가 열려있다면 업데이트
+function updateDashboardIfOpen() {
+    // 부모 창이나 다른 창에서 대시보드가 열려있는지 확인
+    try {
+        // 부모 창이 있고 대시보드인 경우
+        if (window.opener && window.opener.location.href.includes('dashboard.html')) {
+            window.opener.postMessage({
+                type: 'SIMULATION_UPDATE',
+                testId: simulationState.testId,
+                stats: simulationState.stats
+            }, '*');
+        }
+        
+        // 같은 창에서 대시보드가 열려있는 경우 (iframe 등)
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage({
+                type: 'SIMULATION_UPDATE',
+                testId: simulationState.testId,
+                stats: simulationState.stats
+            }, '*');
+        }
+    } catch (error) {
+        // 다른 도메인이나 보안 정책으로 인한 오류는 무시
+        console.log('대시보드 업데이트 중 오류 (무시됨):', error.message);
+    }
 }
 
 // 상호작용 기록
@@ -204,6 +337,9 @@ async function recordInteraction(version, interactionType) {
             }
             
             updateStats();
+            
+            // 상호작용 발생 시 즉시 대시보드 업데이트
+            updateDashboardIfOpen();
             
             // 실시간 알림 (구매 시에만)
             if (interactionType === 'purchase') {
@@ -248,26 +384,23 @@ function updateStats() {
 
 // 통계적 유의성 계산 (간단한 버전)
 function calculateSignificance(stats) {
-    const totalA = stats.versionA.views;
-    const totalB = stats.versionB.views;
-    const purchasesA = stats.versionA.purchases;
-    const purchasesB = stats.versionB.purchases;
+    const n1 = stats.versionA.views;
+    const n2 = stats.versionB.views;
+    const p1 = stats.versionA.purchases / Math.max(n1, 1);
+    const p2 = stats.versionB.purchases / Math.max(n2, 1);
     
-    if (totalA < 10 || totalB < 10) {
-        return '데이터 부족';
+    if (n1 < 10 || n2 < 10) {
+        return '부족한 데이터';
     }
     
-    const rateA = purchasesA / totalA;
-    const rateB = purchasesB / totalB;
-    
     // 간단한 z-test
-    const pooledRate = (purchasesA + purchasesB) / (totalA + totalB);
-    const standardError = Math.sqrt(pooledRate * (1 - pooledRate) * (1/totalA + 1/totalB));
-    const zScore = Math.abs(rateB - rateA) / standardError;
+    const pooledP = (stats.versionA.purchases + stats.versionB.purchases) / (n1 + n2);
+    const se = Math.sqrt(pooledP * (1 - pooledP) * (1/n1 + 1/n2));
+    const z = (p2 - p1) / se;
     
-    if (zScore > 1.96) {
+    if (Math.abs(z) > 1.96) {
         return '유의함 (95%)';
-    } else if (zScore > 1.645) {
+    } else if (Math.abs(z) > 1.645) {
         return '유의함 (90%)';
     } else {
         return '유의하지 않음';
@@ -276,82 +409,60 @@ function calculateSignificance(stats) {
 
 // 승자 표시 업데이트
 function updateWinnerDisplay(conversionA, conversionB) {
-    const cardA = document.getElementById('versionA');
-    const cardB = document.getElementById('versionB');
+    const versionACard = document.getElementById('versionA');
+    const versionBCard = document.getElementById('versionB');
     
     // 기존 스타일 제거
-    cardA.style.borderColor = '#e2e8f0';
-    cardB.style.borderColor = '#e2e8f0';
-    cardA.style.backgroundColor = 'white';
-    cardB.style.backgroundColor = 'white';
+    versionACard.style.borderColor = '#e2e8f0';
+    versionBCard.style.borderColor = '#e2e8f0';
+    versionACard.style.backgroundColor = 'white';
+    versionBCard.style.backgroundColor = 'white';
     
+    // 승자 표시
     if (conversionB > conversionA && conversionA > 0) {
-        cardB.style.borderColor = '#38a169';
-        cardB.style.backgroundColor = '#f0fff4';
+        versionBCard.style.borderColor = '#38a169';
+        versionBCard.style.backgroundColor = '#f0fff4';
     } else if (conversionA > conversionB && conversionB > 0) {
-        cardA.style.borderColor = '#38a169';
-        cardA.style.backgroundColor = '#f0fff4';
+        versionACard.style.borderColor = '#38a169';
+        versionACard.style.backgroundColor = '#f0fff4';
     }
 }
 
 // 시뮬레이션 초기화
 function resetSimulation() {
-    simulationState.isRunning = false;
-    simulationState.testId = null;
+    stopSimulation();
+    
     simulationState.stats = {
         versionA: { views: 0, purchases: 0 },
         versionB: { views: 0, purchases: 0 }
     };
     
-    if (simulationState.autoSimulation) {
-        clearInterval(simulationState.autoSimulation);
-        simulationState.autoSimulation = null;
-    }
-    
     updateStats();
-    
-    // 버튼 상태 복원
-    document.querySelector('.btn-start').textContent = '시뮬레이션 시작';
-    document.querySelector('.btn-start').disabled = false;
-    
-    // 카드 스타일 초기화
-    document.getElementById('versionA').style.borderColor = '#e2e8f0';
-    document.getElementById('versionB').style.borderColor = '#e2e8f0';
-    document.getElementById('versionA').style.backgroundColor = 'white';
-    document.getElementById('versionB').style.backgroundColor = 'white';
-    
     showNotification('시뮬레이션이 초기화되었습니다.', 'info');
 }
 
-// 테스트 데이터 초기화 (데이터베이스에서 해당 테스트의 상호작용 데이터 삭제)
+// 테스트 데이터 초기화
 async function resetTestData() {
-    const selectedTestId = document.getElementById('testSelect').value;
-    if (!selectedTestId) {
-        showNotification('초기화할 테스트를 선택해주세요.', 'error');
-        return;
-    }
-    
-    if (!confirm(`테스트 ID ${selectedTestId}의 모든 상호작용 데이터를 삭제하시겠습니까?`)) {
+    if (!confirm('정말로 모든 테스트 데이터를 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
         return;
     }
     
     try {
-        const response = await fetch(`http://localhost:8000/api/abtest/test/${selectedTestId}/reset`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
+        const response = await fetch('http://localhost:8000/api/abtest/cleanup', {
+            method: 'DELETE'
         });
         
         if (response.ok) {
-            showNotification(`테스트 ID ${selectedTestId}의 데이터가 초기화되었습니다.`, 'success');
-            resetSimulation(); // 로컬 통계도 초기화
+            const result = await response.json();
+            showNotification(result.message, 'success');
+            resetSimulation();
+            loadTestList();
         } else {
             throw new Error('데이터 초기화 실패');
         }
     } catch (error) {
-        console.error('테스트 데이터 초기화 오류:', error);
-        showNotification('테스트 데이터 초기화 중 오류가 발생했습니다.', 'error');
+        console.error('데이터 초기화 오류:', error);
+        showNotification('데이터 초기화 중 오류가 발생했습니다.', 'error');
     }
 }
 
@@ -398,10 +509,28 @@ function showNotification(message, type = 'info') {
     
     document.body.appendChild(notification);
     
-    // 3초 후 자동 제거
     setTimeout(() => {
         notification.remove();
     }, 3000);
+}
+
+// 대시보드 열기
+function openDashboard() {
+    window.open('dashboard.html', '_blank');
+}
+
+// AI 분석 열기
+function openAIAnalysis() {
+    if (!simulationState.testId) {
+        showNotification('먼저 테스트를 선택해주세요.', 'error');
+        return;
+    }
+    window.open(`dashboard.html?testId=${simulationState.testId}&view=analysis`, '_blank');
+}
+
+// 테스트 히스토리 열기
+function openTestHistory() {
+    window.open('dashboard.html?view=history', '_blank');
 }
 
 // 키보드 단축키
@@ -436,5 +565,8 @@ document.addEventListener('keydown', function(event) {
 window.addEventListener('beforeunload', function() {
     if (simulationState.autoSimulation) {
         clearInterval(simulationState.autoSimulation);
+    }
+    if (simulationState.dashboardUpdateInterval) {
+        clearInterval(simulationState.dashboardUpdateInterval);
     }
 });

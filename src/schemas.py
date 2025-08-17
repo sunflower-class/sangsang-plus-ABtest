@@ -27,6 +27,13 @@ class ABTestResponse(BaseModel):
     description: Optional[str]
     product_id: str
     status: TestStatus
+    baseline_image_url: Optional[str] = None
+    challenger_image_url: Optional[str] = None
+    ai_winner_variant_id: Optional[int] = None
+    user_selected_winner_id: Optional[int] = None
+    winner_selection_deadline: Optional[datetime] = None
+    test_cycle_number: int = 1
+    parent_test_id: Optional[int] = None
     test_duration_days: int
     traffic_split_ratio: float
     min_sample_size: int

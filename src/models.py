@@ -12,6 +12,7 @@ class TestStatus(str, Enum):
     COMPLETED = "completed"
     PAUSED = "paused"
     FAILED = "failed"
+    WAITING_FOR_WINNER_SELECTION = "waiting_for_winner_selection"
 
 class VariantType(str, Enum):
     BASELINE = "baseline"
@@ -34,6 +35,19 @@ class ABTest(Base):
     description = Column(Text, nullable=True)
     product_id = Column(String(100), nullable=False, index=True)
     status = Column(String(50), default=TestStatus.ACTIVE, index=True)
+    
+    # 이미지 URL 필드 추가
+    baseline_image_url = Column(String(500), nullable=True)  # A안 이미지 URL
+    challenger_image_url = Column(String(500), nullable=True)  # B안 이미지 URL
+    
+    # 승자 선택 관련 필드
+    ai_winner_variant_id = Column(Integer, nullable=True)  # AI가 결정한 승자
+    user_selected_winner_id = Column(Integer, nullable=True)  # 사용자가 선택한 승자
+    winner_selection_deadline = Column(DateTime, nullable=True)  # 승자 선택 마감 시간
+    
+    # 테스트 사이클 관리
+    test_cycle_number = Column(Integer, default=1)  # 몇 번째 테스트 사이클인지
+    parent_test_id = Column(Integer, nullable=True)  # 이전 테스트 ID
     
     # 테스트 설정
     test_duration_days = Column(Integer, default=30)
@@ -83,6 +97,10 @@ class Variant(Base):
     revenue = Column(Float, default=0.0)
     bounce_rate = Column(Float, default=0.0)
     avg_session_duration = Column(Float, default=0.0)
+    
+    # AI 점수 계산
+    ai_score = Column(Float, default=0.0)  # AI가 계산한 종합 점수
+    ai_confidence = Column(Float, default=0.0)  # AI 신뢰도
     
     # 상태
     is_active = Column(Boolean, default=True, index=True)

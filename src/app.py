@@ -355,30 +355,53 @@ def abtest_interaction_post(interaction: dict):
     try:
         from sqlalchemy.orm import Session
         from .database import SessionLocal
-        from .models import PerformanceLog
+        from .models import PerformanceLog, Variant
         from datetime import datetime
         import json
         
         db = SessionLocal()
         try:
-            # variant를 variant_id로 변환 (baseline=1, challenger=2)
-            variant_id = 1 if interaction.get('variant') == 'baseline' else 2
+            test_id = interaction.get('test_id')
+            variant_type = interaction.get('variant')
+            interaction_type = interaction.get('interaction_type', 'view')
+            
+            # 실제 variant ID 조회
+            variant = db.query(Variant).filter(
+                Variant.ab_test_id == test_id,
+                Variant.variant_type == variant_type
+            ).first()
+            
+            if not variant:
+                return {"status": "error", "message": f"Variant not found for test {test_id}, type {variant_type}"}
+            
+            variant_id = variant.id
             
             # 상호작용 로그 생성
             log = PerformanceLog(
-                ab_test_id=interaction.get('test_id'),
+                ab_test_id=test_id,
                 variant_id=variant_id,
                 user_id=f"simulator_{datetime.utcnow().timestamp()}",
-                session_id=f"session_simulator_{interaction.get('test_id')}",
-                interaction_type=interaction.get('interaction_type', 'view'),
+                session_id=f"session_simulator_{test_id}",
+                interaction_type=interaction_type,
                 interaction_metadata=json.dumps(interaction),
                 timestamp=datetime.utcnow()
             )
             
             db.add(log)
+            
+            # Variant 테이블의 통계 업데이트
+            if interaction_type == 'view':
+                variant.impressions += 1
+            elif interaction_type == 'click':
+                variant.clicks += 1
+            elif interaction_type == 'purchase':
+                variant.purchases += 1
+                # 구매 시 수익 추가 (테스트용으로 1000원 고정)
+                variant.revenue += 1000
+            
             db.commit()
             
-            print(f"Interaction logged: {interaction.get('interaction_type')} for test {interaction.get('test_id')} variant {interaction.get('variant')}")
+            print(f"Interaction logged: {interaction_type} for test {test_id} variant {variant_type} (ID: {variant_id})")
             return {"status": "success", "log_id": log.id}
         finally:
             db.close()
