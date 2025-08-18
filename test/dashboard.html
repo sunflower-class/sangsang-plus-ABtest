@@ -8,8 +8,42 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+    <!-- Header -->
+    <header class="main-header">
+        <div class="header-container">
+            <!-- Logo -->
+            <div class="logo">
+                <img src="logo.png" alt="상상더하기 로고" class="logo-img" />
+                <span class="logo-text">상상더하기</span>
+            </div>
+
+            <!-- Navigation -->
+            <nav class="nav">
+                <a href="index.html" class="nav-link">홈</a>
+                <a href="dashboard.html" class="nav-link active">대시보드</a>
+                <a href="simple_test_simulator.html" class="nav-link">시뮬레이터</a>
+                <a href="api_test_runner.html" class="nav-link">API 테스트</a>
+            </nav>
+
+            <!-- Mobile Menu Button -->
+            <button class="mobile-menu-btn" onclick="toggleMobileMenu()">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+
+        <!-- Mobile Menu -->
+        <div class="mobile-menu" id="mobileMenu">
+            <a href="index.html" class="mobile-nav-link">홈</a>
+            <a href="dashboard.html" class="mobile-nav-link active">대시보드</a>
+            <a href="simple_test_simulator.html" class="mobile-nav-link">시뮬레이터</a>
+            <a href="api_test_runner.html" class="mobile-nav-link">API 테스트</a>
+        </div>
+    </header>
+
     <div class="container">
-        <header>
+        <header class="page-header">
             <h1>🤖 AI 기반 A/B 테스트 자동화 플랫폼</h1>
             <p>실시간 테스트 현황 및 성과 분석</p>
             <div class="navigation-buttons">
@@ -18,7 +52,7 @@
                 <button onclick="showAnalysisSection()" class="nav-btn">🧠 AI 분석</button>
                 <button onclick="showHistorySection()" class="nav-btn">📈 히스토리</button>
                 <button onclick="window.open('simple_test_simulator.html', '_blank')" class="nav-btn">🎮 시뮬레이터</button>
-                <button onclick="manualRefresh()" class="nav-btn" style="background: #7D6AE7; color: white;">🔄 새로고침</button>
+                <button onclick="manualRefresh()" class="nav-btn" style="background: hsl(var(--primary)); color: hsl(var(--primary-foreground));">🔄 새로고침</button>
             </div>
         </header>
 
@@ -153,6 +187,69 @@
         </div>
     </div>
 
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-container">
+            <div class="footer-grid">
+                <!-- Company Info -->
+                <div class="footer-section">
+                    <div class="footer-logo">
+                        <img src="logo.png" alt="상상더하기 로고" class="footer-logo-img" />
+                        <span class="footer-logo-text">상상더하기</span>
+                    </div>
+                    <p class="footer-description">
+                        AI 기반 A/B 테스트 자동화 플랫폼으로 더 나은 사용자 경험을 만들어보세요.
+                    </p>
+                </div>
+
+                <!-- Quick Links -->
+                <div class="footer-section">
+                    <h3 class="footer-title">바로가기</h3>
+                    <div class="footer-links">
+                        <a href="index.html" class="footer-link">홈</a>
+                        <a href="dashboard.html" class="footer-link">대시보드</a>
+                        <a href="simple_test_simulator.html" class="footer-link">시뮬레이터</a>
+                        <a href="api_test_runner.html" class="footer-link">API 테스트</a>
+                    </div>
+                </div>
+
+                <!-- Support -->
+                <div class="footer-section">
+                    <h3 class="footer-title">지원</h3>
+                    <div class="footer-links">
+                        <a href="#" class="footer-link">문서</a>
+                        <a href="#" class="footer-link">FAQ</a>
+                        <a href="#" class="footer-link">고객지원</a>
+                        <a href="#" class="footer-link">피드백</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p class="footer-copyright">
+                    © 2025 상상더하기. All rights reserved.
+                </p>
+            </div>
+        </div>
+    </footer>
+
     <script src="dashboard.js"></script>
+    <script>
+        // Mobile menu toggle
+        function toggleMobileMenu() {
+            const mobileMenu = document.getElementById('mobileMenu');
+            mobileMenu.classList.toggle('active');
+        }
+
+        // Close mobile menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const mobileMenu = document.getElementById('mobileMenu');
+            const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+            
+            if (!mobileMenu.contains(event.target) && !mobileMenuBtn.contains(event.target)) {
+                mobileMenu.classList.remove('active');
+            }
+        });
+    </script>
 </body>
 </html>

@@ -5,6 +5,61 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>API 테스트 러너</title>
     <style>
+        /* 상상더하기 Design System - Modern, Clean, Trustworthy, Intuitive */
+        :root {
+            /* Core Brand Colors */
+            --primary: 242 37% 46%;              /* #4A47A3 - 신뢰감 있는 파란색 */
+            --primary-foreground: 0 0% 100%;     /* White text on primary */
+            --primary-hover: 242 37% 40%;        /* Darker primary for hover */
+            
+            --secondary: 249 72% 66%;            /* #7868E6 - 활기찬 보라색 */
+            --secondary-foreground: 0 0% 100%;   /* White text on secondary */
+            --secondary-hover: 249 72% 60%;      /* Darker secondary for hover */
+            
+            --accent: 151 68% 81%;               /* #ADF0D1 - 생성적인 녹색 */
+            --accent-foreground: 220 13% 18%;    /* Dark text on accent */
+            --accent-hover: 151 68% 75%;         /* Darker accent for hover */
+
+            /* Background & Layout */
+            --background: 0 0% 100%;             /* Pure white */
+            --foreground: 220 13% 18%;           /* Almost black for text */
+            --background-soft: 220 13% 97%;      /* #F5F5F5 - Light gray backgrounds */
+            
+            /* UI Elements */
+            --card: 0 0% 100%;
+            --card-foreground: 220 13% 18%;
+            --card-border: 220 13% 91%;
+            
+            --muted: 220 13% 97%;                /* Light gray for muted elements */
+            --muted-foreground: 220 9% 46%;      /* Medium gray for secondary text */
+            
+            --border: 220 13% 91%;               /* Light border color */
+            --input: 220 13% 91%;                /* Input border */
+            --ring: 242 37% 46%;                 /* Focus ring color - same as primary */
+            
+            /* Status Colors */
+            --success: 151 68% 50%;
+            --success-foreground: 0 0% 100%;
+            --warning: 38 92% 50%;
+            --warning-foreground: 0 0% 100%;
+            --destructive: 0 84% 60%;
+            --destructive-foreground: 0 0% 100%;
+            
+            /* Shadows */
+            --shadow-soft: 0 1px 3px 0 hsl(220 13% 18% / 0.1);
+            --shadow-medium: 0 4px 6px -1px hsl(220 13% 18% / 0.1);
+            --shadow-large: 0 10px 15px -3px hsl(220 13% 18% / 0.1);
+            --shadow-primary: 0 10px 30px -10px hsl(var(--primary) / 0.3);
+            
+            /* Animation */
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            
+            /* Radius */
+            --radius: 8px;                       /* Consistent 8px border radius */
+            --radius-large: 12px;
+            --radius-small: 4px;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -12,138 +67,144 @@
         }
         
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #FDFCFE;
+            font-family: 'Noto Sans KR', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: hsl(var(--background));
             min-height: 100vh;
-            color: #4B4453;
-            padding: 20px;
+            color: hsl(var(--foreground));
+            padding: 2rem;
         }
         
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            background: #FDFCFE;
-            border-radius: 15px;
-            padding: 30px;
-            box-shadow: 0 4px 20px rgba(125, 106, 231, 0.08);
-            border: 1px solid rgba(125, 106, 231, 0.1);
+            background: hsl(var(--card));
+            border-radius: var(--radius-large);
+            padding: 2rem;
+            box-shadow: var(--shadow-large);
+            border: 1px solid hsl(var(--card-border));
         }
         
         h1 {
             text-align: center;
-            color: #4B4453;
-            margin-bottom: 30px;
+            color: hsl(var(--foreground));
+            margin-bottom: 2rem;
             font-size: 2.5rem;
-            font-weight: bold;
+            font-weight: 700;
         }
         
         .test-section {
-            margin-bottom: 30px;
-            padding: 20px;
-            border: 1px solid rgba(125, 106, 231, 0.2);
-            border-radius: 10px;
-            background: #FDFCFE;
-            box-shadow: 0 2px 8px rgba(125, 106, 231, 0.05);
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            border: 1px solid hsl(var(--card-border));
+            border-radius: var(--radius);
+            background: hsl(var(--card));
+            box-shadow: var(--shadow-soft);
         }
         
         .test-section h2 {
-            color: #4B4453;
-            margin-bottom: 15px;
+            color: hsl(var(--foreground));
+            margin-bottom: 1rem;
             font-size: 1.3rem;
-            font-weight: bold;
+            font-weight: 600;
         }
         
         .test-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
         }
         
         .test-card {
-            background: #FDFCFE;
-            border: 1px solid rgba(125, 106, 231, 0.2);
-            border-radius: 8px;
-            padding: 15px;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 8px rgba(125, 106, 231, 0.05);
+            background: hsl(var(--card));
+            border: 1px solid hsl(var(--card-border));
+            border-radius: var(--radius);
+            padding: 1rem;
+            transition: var(--transition-smooth);
+            box-shadow: var(--shadow-soft);
         }
         
         .test-card:hover {
-            border-color: #7D6AE7;
-            box-shadow: 0 5px 15px rgba(125, 106, 231, 0.15);
+            border-color: hsl(var(--primary));
+            box-shadow: var(--shadow-primary);
+            transform: translateY(-2px);
         }
         
         .test-card h3 {
-            color: #4B4453;
-            margin-bottom: 10px;
+            color: hsl(var(--foreground));
+            margin-bottom: 0.75rem;
             font-size: 1.1rem;
-            font-weight: bold;
+            font-weight: 600;
         }
         
         .test-card p {
-            color: #B0A8B9;
-            margin-bottom: 15px;
+            color: hsl(var(--muted-foreground));
+            margin-bottom: 1rem;
             font-size: 0.9rem;
         }
         
         .btn {
-            padding: 8px 16px;
+            padding: 0.5rem 1rem;
             border: none;
-            border-radius: 6px;
+            border-radius: var(--radius);
             cursor: pointer;
             font-weight: 600;
             font-size: 0.9rem;
-            transition: all 0.2s ease;
+            transition: var(--transition-smooth);
         }
         
         .btn-primary {
-            background: #7D6AE7;
-            color: white;
+            background: hsl(var(--primary));
+            color: hsl(var(--primary-foreground));
         }
         
         .btn-primary:hover {
-            background: #9B89B3;
+            background: hsl(var(--primary-hover));
+            transform: translateY(-1px);
         }
         
         .btn-success {
-            background: #38a169;
-            color: white;
+            background: hsl(var(--success));
+            color: hsl(var(--success-foreground));
         }
         
         .btn-success:hover {
-            background: #2f855a;
+            background: hsl(var(--success) / 0.9);
+            transform: translateY(-1px);
         }
         
         .btn-warning {
-            background: #d69e2e;
-            color: white;
+            background: hsl(var(--warning));
+            color: hsl(var(--warning-foreground));
         }
         
         .btn-warning:hover {
-            background: #b7791f;
+            background: hsl(var(--warning) / 0.9);
+            transform: translateY(-1px);
         }
         
         .btn-danger {
-            background: #e53e3e;
-            color: white;
+            background: hsl(var(--destructive));
+            color: hsl(var(--destructive-foreground));
         }
         
         .btn-danger:hover {
-            background: #c53030;
+            background: hsl(var(--destructive) / 0.9);
+            transform: translateY(-1px);
         }
         
         .result-panel {
-            background: #2d3748;
-            color: #e2e8f0;
-            border-radius: 8px;
-            padding: 15px;
-            margin-top: 15px;
+            background: hsl(var(--muted));
+            color: hsl(var(--foreground));
+            border-radius: var(--radius);
+            padding: 1rem;
+            margin-top: 1rem;
             font-family: 'Courier New', monospace;
             font-size: 0.9rem;
             max-height: 300px;
             overflow-y: auto;
             white-space: pre-wrap;
+            border: 1px solid hsl(var(--card-border));
         }
         
         .status-indicator {
@@ -151,48 +212,49 @@
             width: 12px;
             height: 12px;
             border-radius: 50%;
-            margin-right: 8px;
+            margin-right: 0.5rem;
         }
         
         .status-pending {
-            background: #d69e2e;
+            background: hsl(var(--warning));
         }
         
         .status-success {
-            background: #38a169;
+            background: hsl(var(--success));
         }
         
         .status-error {
-            background: #e53e3e;
+            background: hsl(var(--destructive));
         }
         
         .bulk-actions {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 2rem;
         }
         
         .bulk-btn {
-            padding: 12px 24px;
-            margin: 0 10px;
+            padding: 0.75rem 1.5rem;
+            margin: 0 0.5rem;
             border: none;
-            border-radius: 8px;
+            border-radius: var(--radius);
             cursor: pointer;
             font-weight: 600;
             font-size: 1rem;
+            transition: var(--transition-smooth);
         }
         
         .progress-bar {
             width: 100%;
             height: 20px;
-            background: #e2e8f0;
-            border-radius: 10px;
+            background: hsl(var(--muted));
+            border-radius: var(--radius);
             overflow: hidden;
-            margin: 10px 0;
+            margin: 0.75rem 0;
         }
         
         .progress-fill {
             height: 100%;
-            background: linear-gradient(90deg, #667eea, #764ba2);
+            background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--secondary)));
             transition: width 0.3s ease;
             width: 0%;
         }
@@ -200,42 +262,50 @@
         .summary-stats {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            margin-top: 20px;
+            gap: 1rem;
+            margin-top: 1.5rem;
         }
         
         .stat-item {
             text-align: center;
-            padding: 15px;
-            background: white;
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
+            padding: 1rem;
+            background: hsl(var(--card));
+            border-radius: var(--radius);
+            border: 1px solid hsl(var(--card-border));
+            box-shadow: var(--shadow-soft);
+            transition: var(--transition-smooth);
+        }
+        
+        .stat-item:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-medium);
         }
         
         .stat-value {
             font-size: 1.5rem;
-            font-weight: bold;
-            color: #667eea;
+            font-weight: 700;
+            color: hsl(var(--primary));
             display: block;
         }
         
         .stat-label {
-            color: #718096;
+            color: hsl(var(--muted-foreground));
             font-size: 0.9rem;
-            margin-top: 5px;
+            margin-top: 0.25rem;
         }
         
         /* 알림 스타일 */
         .notification {
             position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px 20px;
-            border-radius: 8px;
+            top: 1.25rem;
+            right: 1.25rem;
+            padding: 1rem 1.25rem;
+            border-radius: var(--radius);
             color: white;
             font-weight: 600;
             z-index: 1000;
-            animation: slideIn 0.3s ease;
+            animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--shadow-large);
         }
         
         @keyframes slideIn {
@@ -248,9 +318,314 @@
                 opacity: 1;
             }
         }
+        
+        /* Header Styles */
+        .header {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            width: 100%;
+            border-bottom: 1px solid hsl(var(--border));
+            background: hsl(var(--background) / 0.95);
+            backdrop-filter: blur(8px);
+        }
+
+        .header-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 2rem;
+            height: 4rem;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .logo-img {
+            height: 3rem;
+            width: 3rem;
+        }
+
+        .logo-text {
+            font-size: 1.25rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .nav {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius);
+            text-decoration: none;
+            color: hsl(var(--muted-foreground));
+            font-weight: 500;
+            transition: var(--transition-smooth);
+        }
+
+        .nav-link:hover {
+            color: hsl(var(--foreground));
+            background: hsl(var(--muted) / 0.5);
+        }
+
+        .nav-link.active {
+            background: hsl(var(--primary));
+            color: hsl(var(--primary-foreground));
+            box-shadow: var(--shadow-medium);
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            flex-direction: column;
+            gap: 0.25rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0.5rem;
+        }
+
+        .mobile-menu-btn span {
+            width: 1.5rem;
+            height: 2px;
+            background: hsl(var(--foreground));
+            transition: var(--transition-smooth);
+        }
+
+        .mobile-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: hsl(var(--background));
+            border-bottom: 1px solid hsl(var(--border));
+            padding: 1rem 2rem;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .mobile-menu.active {
+            display: flex;
+        }
+
+        .mobile-nav-link {
+            padding: 0.75rem 1rem;
+            border-radius: var(--radius);
+            text-decoration: none;
+            color: hsl(var(--muted-foreground));
+            font-weight: 500;
+            transition: var(--transition-smooth);
+        }
+
+        .mobile-nav-link:hover {
+            color: hsl(var(--foreground));
+            background: hsl(var(--muted) / 0.5);
+        }
+
+        .mobile-nav-link.active {
+            background: hsl(var(--primary));
+            color: hsl(var(--primary-foreground));
+        }
+
+        /* Footer Styles */
+        .footer {
+            background: hsl(var(--background-soft));
+            border-top: 1px solid hsl(var(--border));
+            margin-top: 4rem;
+        }
+
+        .footer-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .footer-section {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .footer-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .footer-logo-img {
+            height: 3rem;
+            width: 3rem;
+        }
+
+        .footer-logo-text {
+            font-size: 1.125rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .footer-description {
+            color: hsl(var(--muted-foreground));
+            font-size: 0.875rem;
+            line-height: 1.6;
+        }
+
+        .footer-title {
+            font-weight: 600;
+            color: hsl(var(--foreground));
+            margin-bottom: 0.5rem;
+        }
+
+        .footer-links {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .footer-link {
+            color: hsl(var(--muted-foreground));
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: var(--transition-smooth);
+        }
+
+        .footer-link:hover {
+            color: hsl(var(--primary));
+        }
+
+        .footer-bottom {
+            border-top: 1px solid hsl(var(--border));
+            padding-top: 2rem;
+            text-align: center;
+        }
+
+        .footer-copyright {
+            color: hsl(var(--muted-foreground));
+            font-size: 0.875rem;
+        }
+
+        /* Layout Adjustments */
+        body {
+            padding: 0;
+        }
+
+        .container {
+            margin-top: 2rem;
+        }
+
+        /* 반응형 디자인 */
+        @media (max-width: 768px) {
+            .nav {
+                display: none;
+            }
+
+            .mobile-menu-btn {
+                display: flex;
+            }
+
+            .header-container {
+                padding: 0 1rem;
+            }
+
+            .footer-container {
+                padding: 2rem 1rem;
+            }
+
+            .footer-grid {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+
+            .test-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .summary-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .container {
+                padding: 1rem;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .bulk-btn {
+                display: block;
+                margin: 0.5rem 0;
+                width: 100%;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .summary-stats {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-container">
+            <!-- Logo -->
+            <div class="logo">
+                <img src="logo.png" alt="상상더하기 로고" class="logo-img" />
+                <span class="logo-text">상상더하기</span>
+            </div>
+
+            <!-- Navigation -->
+            <nav class="nav">
+                <a href="index.html" class="nav-link">홈</a>
+                <a href="dashboard.html" class="nav-link">대시보드</a>
+                <a href="simple_test_simulator.html" class="nav-link">시뮬레이터</a>
+                <a href="api_test_runner.html" class="nav-link active">API 테스트</a>
+            </nav>
+
+            <!-- Mobile Menu Button -->
+            <button class="mobile-menu-btn" onclick="toggleMobileMenu()">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+
+        <!-- Mobile Menu -->
+        <div class="mobile-menu" id="mobileMenu">
+            <a href="index.html" class="mobile-nav-link">홈</a>
+            <a href="dashboard.html" class="mobile-nav-link">대시보드</a>
+            <a href="simple_test_simulator.html" class="mobile-nav-link">시뮬레이터</a>
+            <a href="api_test_runner.html" class="mobile-nav-link active">API 테스트</a>
+        </div>
+    </header>
+
     <div class="container">
         <h1>🔧 API 테스트 러너</h1>
         
@@ -373,6 +748,69 @@
         </div>
     </div>
 
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-container">
+            <div class="footer-grid">
+                <!-- Company Info -->
+                <div class="footer-section">
+                    <div class="footer-logo">
+                        <img src="logo.png" alt="상상더하기 로고" class="footer-logo-img" />
+                        <span class="footer-logo-text">상상더하기</span>
+                    </div>
+                    <p class="footer-description">
+                        AI 기반 A/B 테스트 자동화 플랫폼으로 더 나은 사용자 경험을 만들어보세요.
+                    </p>
+                </div>
+
+                <!-- Quick Links -->
+                <div class="footer-section">
+                    <h3 class="footer-title">바로가기</h3>
+                    <div class="footer-links">
+                        <a href="index.html" class="footer-link">홈</a>
+                        <a href="dashboard.html" class="footer-link">대시보드</a>
+                        <a href="simple_test_simulator.html" class="footer-link">시뮬레이터</a>
+                        <a href="api_test_runner.html" class="footer-link">API 테스트</a>
+                    </div>
+                </div>
+
+                <!-- Support -->
+                <div class="footer-section">
+                    <h3 class="footer-title">지원</h3>
+                    <div class="footer-links">
+                        <a href="#" class="footer-link">문서</a>
+                        <a href="#" class="footer-link">FAQ</a>
+                        <a href="#" class="footer-link">고객지원</a>
+                        <a href="#" class="footer-link">피드백</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p class="footer-copyright">
+                    © 2025 상상더하기. All rights reserved.
+                </p>
+            </div>
+        </div>
+    </footer>
+
     <script src="api_test_runner.js"></script>
+    <script>
+        // Mobile menu toggle
+        function toggleMobileMenu() {
+            const mobileMenu = document.getElementById('mobileMenu');
+            mobileMenu.classList.toggle('active');
+        }
+
+        // Close mobile menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const mobileMenu = document.getElementById('mobileMenu');
+            const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+            
+            if (!mobileMenu.contains(event.target) && !mobileMenuBtn.contains(event.target)) {
+                mobileMenu.classList.remove('active');
+            }
+        });
+    </script>
 </body>
 </html>
