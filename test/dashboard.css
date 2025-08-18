@@ -6,9 +6,9 @@
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #FDFCFE;
     min-height: 100vh;
-    color: #333;
+    color: #4B4453;
 }
 
 .container {
@@ -20,18 +20,23 @@ body {
 header {
     text-align: center;
     margin-bottom: 30px;
-    color: white;
+    background: #FDFCFE;
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0 2px 10px rgba(125, 106, 231, 0.1);
 }
 
 header h1 {
     font-size: 2.5rem;
     margin-bottom: 10px;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    color: #4B4453;
+    font-weight: bold;
 }
 
 header p {
     font-size: 1.2rem;
-    opacity: 0.9;
+    color: #B0A8B9;
+    margin-bottom: 20px;
 }
 
 .dashboard-grid {
@@ -42,16 +47,17 @@ header p {
 }
 
 .card {
-    background: white;
+    background: #FDFCFE;
     border-radius: 15px;
     padding: 25px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 20px rgba(125, 106, 231, 0.08);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border: 1px solid rgba(125, 106, 231, 0.1);
 }
 
 .card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+    box-shadow: 0 8px 30px rgba(125, 106, 231, 0.15);
 }
 
 .card.full-width {
@@ -59,11 +65,12 @@ header p {
 }
 
 .card h2 {
-    color: #4a5568;
+    color: #4B4453;
     margin-bottom: 20px;
     font-size: 1.4rem;
-    border-bottom: 2px solid #e2e8f0;
+    border-bottom: 2px solid rgba(125, 106, 231, 0.2);
     padding-bottom: 10px;
+    font-weight: bold;
 }
 
 /* 차트 컨테이너 스타일 */
@@ -73,8 +80,8 @@ header p {
     max-height: 400px !important;
     overflow: hidden;
     border-radius: 8px;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
+    background: #FDFCFE;
+    border: 1px solid rgba(125, 106, 231, 0.2);
 }
 
 .chart-container canvas {
@@ -97,26 +104,32 @@ header p {
     display: block;
     margin-bottom: 5px;
     font-weight: 600;
-    color: #4a5568;
+    color: #4B4453;
 }
 
 .form-group input {
     width: 100%;
     padding: 12px;
-    border: 2px solid #e2e8f0;
+    border: 2px solid rgba(125, 106, 231, 0.2);
     border-radius: 8px;
     font-size: 14px;
     transition: border-color 0.3s ease;
+    background: #FDFCFE;
+    color: #4B4453;
 }
 
 .form-group input:focus {
     outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    border-color: #7D6AE7;
+    box-shadow: 0 0 0 3px rgba(125, 106, 231, 0.1);
+}
+
+.form-group input::placeholder {
+    color: #B0A8B9;
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #7D6AE7;
     color: white;
     border: none;
     padding: 12px 24px;
@@ -130,7 +143,8 @@ header p {
 
 .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 5px 15px rgba(125, 106, 231, 0.4);
+    background: #9B89B3;
 }
 
 .btn-primary:active {
@@ -147,44 +161,48 @@ header p {
 .metric {
     text-align: center;
     padding: 20px;
-    background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+    background: #FDFCFE;
     border-radius: 10px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid rgba(125, 106, 231, 0.2);
+    box-shadow: 0 2px 10px rgba(125, 106, 231, 0.05);
 }
 
 .metric-value {
     display: block;
     font-size: 2rem;
     font-weight: bold;
-    color: #667eea;
+    color: #7D6AE7;
     margin-bottom: 5px;
 }
 
 .metric-label {
     font-size: 0.9rem;
-    color: #718096;
+    color: #B0A8B9;
     font-weight: 500;
 }
 
 /* 테스트 카드 스타일 */
 .test-card {
-    background: #f7fafc;
-    border: 1px solid #e2e8f0;
+    background: #FDFCFE;
+    border: 1px solid rgba(125, 106, 231, 0.2);
     border-radius: 10px;
     padding: 15px;
     margin-bottom: 15px;
     transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(125, 106, 231, 0.05);
 }
 
 .test-card:hover {
-    background: #edf2f7;
-    border-color: #cbd5e0;
+    background: rgba(125, 106, 231, 0.02);
+    border-color: #7D6AE7;
+    transform: translateY(-2px);
 }
 
 .test-card h3 {
-    color: #2d3748;
+    color: #4B4453;
     margin-bottom: 10px;
     font-size: 1.1rem;
+    font-weight: bold;
 }
 
 .test-stats {
@@ -197,18 +215,19 @@ header p {
 .test-stat {
     text-align: center;
     padding: 8px;
-    background: white;
+    background: rgba(125, 106, 231, 0.05);
     border-radius: 6px;
     font-size: 0.9rem;
+    border: 1px solid rgba(125, 106, 231, 0.1);
 }
 
 .test-stat .value {
     font-weight: bold;
-    color: #667eea;
+    color: #7D6AE7;
 }
 
 .test-stat .label {
-    color: #718096;
+    color: #B0A8B9;
     font-size: 0.8rem;
 }
 
@@ -216,16 +235,17 @@ header p {
 .logs-container {
     max-height: 300px;
     overflow-y: auto;
-    background: #f7fafc;
+    background: #FDFCFE;
     border-radius: 8px;
     padding: 15px;
     font-family: 'Courier New', monospace;
     font-size: 0.9rem;
+    border: 1px solid rgba(125, 106, 231, 0.2);
 }
 
 .log-entry {
     padding: 8px 0;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid rgba(125, 106, 231, 0.1);
     display: flex;
     align-items: center;
 }
@@ -235,18 +255,18 @@ header p {
 }
 
 .log-timestamp {
-    color: #718096;
+    color: #B0A8B9;
     font-size: 0.8rem;
     margin-right: 10px;
     min-width: 80px;
 }
 
 .log-message {
-    color: #2d3748;
+    color: #4B4453;
 }
 
 .log-level-info {
-    color: #3182ce;
+    color: #7D6AE7;
 }
 
 .log-level-success {
@@ -272,18 +292,21 @@ header p {
 }
 
 .status-active {
-    background: #c6f6d5;
-    color: #22543d;
+    background: rgba(56, 161, 105, 0.1);
+    color: #38a169;
+    border: 1px solid rgba(56, 161, 105, 0.2);
 }
 
 .status-completed {
-    background: #bee3f8;
-    color: #2a4365;
+    background: rgba(125, 106, 231, 0.1);
+    color: #7D6AE7;
+    border: 1px solid rgba(125, 106, 231, 0.2);
 }
 
 .status-winner {
-    background: #fef5e7;
-    color: #744210;
+    background: rgba(237, 137, 54, 0.1);
+    color: #ed8936;
+    border: 1px solid rgba(237, 137, 54, 0.2);
 }
 
 /* 반응형 디자인 */
@@ -314,8 +337,8 @@ header p {
     display: inline-block;
     width: 20px;
     height: 20px;
-    border: 3px solid #f3f3f3;
-    border-top: 3px solid #667eea;
+    border: 3px solid rgba(125, 106, 231, 0.2);
+    border-top: 3px solid #7D6AE7;
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
@@ -347,7 +370,7 @@ header p {
 }
 
 .notification.info {
-    background: #3182ce;
+    background: #7D6AE7;
 }
 
 @keyframes slideIn {
@@ -363,7 +386,7 @@ header p {
 
 /* 승자 선택 섹션 스타일 */
 .winner-info {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #7D6AE7 0%, #9B89B3 100%);
     color: white;
     padding: 20px;
     border-radius: 10px;
@@ -422,17 +445,19 @@ header p {
 
 /* AI 분석 결과 스타일 */
 .ai-analysis-item {
-    background: #f7fafc;
-    border: 1px solid #e2e8f0;
+    background: #FDFCFE;
+    border: 1px solid rgba(125, 106, 231, 0.2);
     border-radius: 8px;
     padding: 15px;
     margin-bottom: 10px;
+    box-shadow: 0 2px 8px rgba(125, 106, 231, 0.05);
 }
 
 .ai-analysis-item h4 {
     margin: 0 0 10px 0;
-    color: #2d3748;
+    color: #4B4453;
     font-size: 1.1rem;
+    font-weight: bold;
 }
 
 .ai-metrics {
@@ -443,23 +468,23 @@ header p {
 }
 
 .ai-metric {
-    background: white;
+    background: rgba(125, 106, 231, 0.05);
     padding: 10px;
     border-radius: 6px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid rgba(125, 106, 231, 0.1);
     text-align: center;
 }
 
 .ai-metric-label {
     font-size: 0.8rem;
-    color: #718096;
+    color: #B0A8B9;
     margin-bottom: 5px;
 }
 
 .ai-metric-value {
     font-size: 1.2rem;
     font-weight: 600;
-    color: #2d3748;
+    color: #4B4453;
 }
 
 .ai-score-high {
@@ -476,7 +501,7 @@ header p {
 
 /* 승자 선택 카드 스타일 */
 #winnerSelectionCard {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    background: linear-gradient(135deg, #7D6AE7 0%, #9B89B3 100%);
     color: white;
 }
 
@@ -486,7 +511,7 @@ header p {
 
 /* 다음 사이클 카드 스타일 */
 #nextCycleCard {
-    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    background: linear-gradient(135deg, #7D6AE7 0%, #9B89B3 100%);
     color: white;
 }
 
@@ -497,11 +522,11 @@ header p {
 #nextCycleCard input {
     background: rgba(255, 255, 255, 0.9);
     border: none;
-    color: #2d3748;
+    color: #4B4453;
 }
 
 #nextCycleCard input::placeholder {
-    color: #718096;
+    color: #B0A8B9;
 }
 
 /* 이미지 미리보기 스타일 */
@@ -511,12 +536,12 @@ header p {
     height: 150px;
     object-fit: cover;
     border-radius: 8px;
-    border: 2px solid #e2e8f0;
+    border: 2px solid rgba(125, 106, 231, 0.2);
     margin: 10px 0;
 }
 
 .image-preview:hover {
-    border-color: #667eea;
+    border-color: #7D6AE7;
     transform: scale(1.05);
     transition: all 0.3s ease;
 }
@@ -532,18 +557,21 @@ header p {
 }
 
 .status-active {
-    background: #c6f6d5;
-    color: #22543d;
+    background: rgba(56, 161, 105, 0.1);
+    color: #38a169;
+    border: 1px solid rgba(56, 161, 105, 0.2);
 }
 
 .status-waiting {
-    background: #fef5e7;
-    color: #744210;
+    background: rgba(237, 137, 54, 0.1);
+    color: #ed8936;
+    border: 1px solid rgba(237, 137, 54, 0.2);
 }
 
 .status-completed {
-    background: #e6fffa;
-    color: #234e52;
+    background: rgba(125, 106, 231, 0.1);
+    color: #7D6AE7;
+    border: 1px solid rgba(125, 106, 231, 0.2);
 }
 
 /* 반응형 디자인 개선 */
@@ -582,8 +610,8 @@ header p {
     display: inline-block;
     width: 20px;
     height: 20px;
-    border: 3px solid #f3f3f3;
-    border-top: 3px solid #667eea;
+    border: 3px solid rgba(125, 106, 231, 0.2);
+    border-top: 3px solid #7D6AE7;
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
@@ -602,21 +630,21 @@ header p {
 }
 
 .message.success {
-    background: #c6f6d5;
-    color: #22543d;
-    border: 1px solid #9ae6b4;
+    background: rgba(56, 161, 105, 0.1);
+    color: #38a169;
+    border: 1px solid rgba(56, 161, 105, 0.2);
 }
 
 .message.error {
-    background: #fed7d7;
-    color: #742a2a;
-    border: 1px solid #feb2b2;
+    background: rgba(229, 62, 62, 0.1);
+    color: #e53e3e;
+    border: 1px solid rgba(229, 62, 62, 0.2);
 }
 
 .message.info {
-    background: #bee3f8;
-    color: #2a4365;
-    border: 1px solid #90cdf4;
+    background: rgba(125, 106, 231, 0.1);
+    color: #7D6AE7;
+    border: 1px solid rgba(125, 106, 231, 0.2);
 }
 
 /* 네비게이션 버튼 스타일 */
@@ -630,9 +658,9 @@ header p {
 
 .nav-btn {
     padding: 8px 16px;
-    border: 2px solid #667eea;
-    background: white;
-    color: #667eea;
+    border: 2px solid #7D6AE7;
+    background: #FDFCFE;
+    color: #7D6AE7;
     border-radius: 20px;
     font-size: 0.9rem;
     font-weight: 600;
@@ -642,13 +670,14 @@ header p {
 }
 
 .nav-btn:hover {
-    background: #667eea;
+    background: #7D6AE7;
     color: white;
     transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(125, 106, 231, 0.3);
 }
 
 .nav-btn.active {
-    background: #667eea;
+    background: #7D6AE7;
     color: white;
 }
 
@@ -667,19 +696,21 @@ header p {
 
 /* 결과 비교 스타일 */
 .result-item {
-    background: white;
-    border: 1px solid #e2e8f0;
+    background: #FDFCFE;
+    border: 1px solid rgba(125, 106, 231, 0.2);
     border-radius: 8px;
     padding: 15px;
     margin-bottom: 10px;
+    box-shadow: 0 2px 8px rgba(125, 106, 231, 0.05);
 }
 
 .result-item h4 {
     margin: 0 0 10px 0;
-    color: #2d3748;
+    color: #4B4453;
     display: flex;
     align-items: center;
     gap: 10px;
+    font-weight: bold;
 }
 
 .badge {
@@ -690,13 +721,15 @@ header p {
 }
 
 .badge.winner {
-    background: #c6f6d5;
-    color: #22543d;
+    background: rgba(56, 161, 105, 0.1);
+    color: #38a169;
+    border: 1px solid rgba(56, 161, 105, 0.2);
 }
 
 .badge.tie {
-    background: #fef5e7;
-    color: #744210;
+    background: rgba(237, 137, 54, 0.1);
+    color: #ed8936;
+    border: 1px solid rgba(237, 137, 54, 0.2);
 }
 
 .result-comparison {
@@ -707,32 +740,34 @@ header p {
 }
 
 .variant-stats {
-    background: #f7fafc;
-    border: 1px solid #e2e8f0;
+    background: rgba(125, 106, 231, 0.05);
+    border: 1px solid rgba(125, 106, 231, 0.2);
     border-radius: 6px;
     padding: 12px;
 }
 
 .variant-stats h5 {
     margin: 0 0 8px 0;
-    color: #4a5568;
+    color: #4B4453;
     font-size: 0.9rem;
+    font-weight: bold;
 }
 
 .variant-stats p {
     margin: 5px 0;
     font-size: 0.85rem;
-    color: #718096;
+    color: #B0A8B9;
 }
 
 .improvement {
     margin: 10px 0 0 0;
     padding: 8px 12px;
-    background: #e6fffa;
+    background: rgba(56, 161, 105, 0.1);
     border-radius: 6px;
     font-weight: 600;
-    color: #234e52;
+    color: #38a169;
     text-align: center;
+    border: 1px solid rgba(56, 161, 105, 0.2);
 }
 
 @media (max-width: 768px) {

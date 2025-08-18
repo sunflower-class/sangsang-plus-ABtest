@@ -149,6 +149,12 @@ def delivery_report(err, msg):
 
 # --- API 엔드포인트 ---
 
+@app.get('/')
+def root():
+    """루트 경로 - 메인 페이지로 리다이렉트"""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url='/test/index.html')
+
 @app.get('/health')
 def health_check():
     return {"status": "OK", "message": "AI A/B Test Platform is running!"}
