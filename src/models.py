@@ -25,6 +25,10 @@ class InteractionType(str, Enum):
     ADD_TO_CART = "add_to_cart"
     VIEW_DETAIL = "view_detail"
     BOUNCE = "bounce"
+    SESSION_START = "session_start"
+    SESSION_END = "session_end"
+    PAGE_LOAD = "page_load"
+    ERROR = "error"
 
 class ABTest(Base):
     """A/B 테스트 메타데이터 테이블"""
@@ -54,17 +58,20 @@ class ABTest(Base):
     traffic_split_ratio = Column(Float, default=0.5)  # 50:50 분배
     min_sample_size = Column(Integer, default=1000)
     
-    # 가중치 설정 (JSON 형태로 저장)
+    # 새로운 가중치 설정 (JSON 형태로 저장)
     weights = Column(JSON, default={
-        "ctr": 0.3,
-        "cvr": 0.4,
-        "revenue": 0.3
+        "cvr_detail_to_purchase": 0.5,  # 핵심: 상세페이지 방문 → 구매 전환율
+        "cvr_click_to_purchase": 0.2,   # 보조: 클릭 → 구매 전환율
+        "cart_add_rate": 0.2,           # 보조: 장바구니 추가율
+        "session_duration": 0.1         # 보조: 세션 지속시간
     })
     
-    # 가드레일 설정
+    # 새로운 가드레일 설정
     guardrail_metrics = Column(JSON, default={
-        "bounce_rate_threshold": 0.8,
-        "session_duration_min": 30
+        "bounce_rate_threshold": 0.7,      # 이탈률 임계값 (70%)
+        "avg_page_load_time_max": 3.0,     # 평균 페이지 로드 시간 최대값 (3초)
+        "error_rate_threshold": 0.05,      # 오류 발생률 임계값 (5%)
+        "min_session_duration": 10         # 최소 세션 지속시간 (10초)
     })
     
     # 시간 정보
@@ -90,13 +97,27 @@ class Variant(Base):
     content = Column(JSON, nullable=False)  # AI가 생성한 상세 페이지 콘텐츠
     content_hash = Column(String(64), nullable=False, index=True)  # 콘텐츠 변경 감지용
     
-    # 성과 지표 (실시간 업데이트)
-    impressions = Column(Integer, default=0)
-    clicks = Column(Integer, default=0)
-    purchases = Column(Integer, default=0)
-    revenue = Column(Float, default=0.0)
-    bounce_rate = Column(Float, default=0.0)
-    avg_session_duration = Column(Float, default=0.0)
+    # 새로운 지표 체계 (실시간 업데이트)
+    # 기본 카운트
+    detail_page_views = Column(Integer, default=0)  # 상세 페이지 방문 수 (기존 impressions 대체)
+    clicks = Column(Integer, default=0)  # 클릭 수 (상품페이지로 유입)
+    purchases = Column(Integer, default=0)  # 구매 수
+    add_to_carts = Column(Integer, default=0)  # 장바구니 추가 수
+    revenue = Column(Float, default=0.0)  # 매출
+    
+    # 사용자 기반 카운트 (중복 제거)
+    unique_detail_viewers = Column(Integer, default=0)  # 상세 페이지 방문 사용자 수
+    unique_purchasers = Column(Integer, default=0)  # 구매 완료 사용자 수
+    unique_cart_adders = Column(Integer, default=0)  # 장바구니 추가 사용자 수
+    
+    # 세션 및 행동 지표
+    total_session_duration = Column(Float, default=0.0)  # 총 세션 시간
+    session_count = Column(Integer, default=0)  # 세션 수
+    bounced_sessions = Column(Integer, default=0)  # 이탈 세션 수
+    
+    # 가드레일 지표
+    page_load_times = Column(JSON, default=list)  # 페이지 로드 시간 목록
+    error_count = Column(Integer, default=0)  # 오류 발생 수
     
     # AI 점수 계산
     ai_score = Column(Float, default=0.0)  # AI가 계산한 종합 점수

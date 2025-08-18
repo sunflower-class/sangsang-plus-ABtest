@@ -442,16 +442,32 @@ async function loadAIAnalysis() {
                             <div class="ai-metric-value">${(variant.ai_confidence * 100).toFixed(1)}%</div>
                         </div>
                         <div class="ai-metric">
-                            <div class="ai-metric-label">CTR</div>
-                            <div class="ai-metric-value">${(variant.ctr * 100).toFixed(2)}%</div>
+                            <div class="ai-metric-label">CVR(상세→구매)</div>
+                            <div class="ai-metric-value">${(variant.cvr_detail_to_purchase * 100).toFixed(2)}%</div>
                         </div>
                         <div class="ai-metric">
-                            <div class="ai-metric-label">CVR</div>
-                            <div class="ai-metric-value">${(variant.cvr * 100).toFixed(2)}%</div>
+                            <div class="ai-metric-label">CVR(클릭→구매)</div>
+                            <div class="ai-metric-value">${(variant.cvr_click_to_purchase * 100).toFixed(2)}%</div>
                         </div>
                         <div class="ai-metric">
-                            <div class="ai-metric-label">노출수</div>
-                            <div class="ai-metric-value">${variant.impressions}</div>
+                            <div class="ai-metric-label">장바구니 추가율</div>
+                            <div class="ai-metric-value">${(variant.cart_add_rate * 100).toFixed(2)}%</div>
+                        </div>
+                        <div class="ai-metric">
+                            <div class="ai-metric-label">평균 세션시간</div>
+                            <div class="ai-metric-value">${variant.avg_session_duration.toFixed(1)}초</div>
+                        </div>
+                        <div class="ai-metric">
+                            <div class="ai-metric-label">상세 조회수</div>
+                            <div class="ai-metric-value">${variant.detail_page_views}</div>
+                        </div>
+                        <div class="ai-metric">
+                            <div class="ai-metric-label">이탈률</div>
+                            <div class="ai-metric-value">${(variant.bounce_rate * 100).toFixed(1)}%</div>
+                        </div>
+                        <div class="ai-metric">
+                            <div class="ai-metric-label">로드시간</div>
+                            <div class="ai-metric-value">${variant.avg_page_load_time.toFixed(2)}초</div>
                         </div>
                     </div>
                 </div>
@@ -513,6 +529,22 @@ async function loadAnalyticsOverview() {
         document.getElementById('activeTests').textContent = data.active_tests || 0;
         document.getElementById('totalInteractions').textContent = data.total_interactions || 0;
         document.getElementById('conversionRate').textContent = `${((data.conversion_rate || 0) * 100).toFixed(1)}%`;
+        
+        // 새로운 지표들 업데이트
+        const cartAddRateElement = document.getElementById('cartAddRate');
+        if (cartAddRateElement) {
+            cartAddRateElement.textContent = `${((data.cart_add_rate || 0) * 100).toFixed(1)}%`;
+        }
+        
+        const totalViewersElement = document.getElementById('totalDetailViewers');
+        if (totalViewersElement) {
+            totalViewersElement.textContent = data.total_detail_viewers || 0;
+        }
+        
+        const totalRevenueElement = document.getElementById('totalRevenue');
+        if (totalRevenueElement) {
+            totalRevenueElement.textContent = `${(data.total_revenue || 0).toLocaleString()}원`;
+        }
     } catch (error) {
         console.error('분석 개요 로드 실패:', error);
     }
@@ -539,10 +571,14 @@ function updatePerformanceChart(performanceData) {
     }
     
     const labels = performanceData.map(item => item.product_name);
-    const baselineConversionRates = performanceData.map(item => item.baseline_conversion_rate);
-    const challengerConversionRates = performanceData.map(item => item.challenger_conversion_rate);
-    const baselineClickRates = performanceData.map(item => item.baseline_click_rate);
-    const challengerClickRates = performanceData.map(item => item.challenger_click_rate);
+    
+    // 새로운 지표 데이터
+    const baselineCvrDetail = performanceData.map(item => item.baseline_cvr_detail || 0);
+    const challengerCvrDetail = performanceData.map(item => item.challenger_cvr_detail || 0);
+    const baselineCartRate = performanceData.map(item => item.baseline_cart_rate || 0);
+    const challengerCartRate = performanceData.map(item => item.challenger_cart_rate || 0);
+    const baselineCvrClick = performanceData.map(item => item.baseline_cvr_click || 0);
+    const challengerCvrClick = performanceData.map(item => item.challenger_cvr_click || 0);
     
     performanceChart = new Chart(ctx, {
         type: 'bar',
@@ -550,31 +586,45 @@ function updatePerformanceChart(performanceData) {
             labels: labels,
             datasets: [
                 {
-                    label: 'A안 전환율',
-                    data: baselineConversionRates,
+                    label: 'A안 CVR (상세→구매)',
+                    data: baselineCvrDetail,
                     backgroundColor: 'rgba(54, 162, 235, 0.8)',
                     borderColor: 'rgba(54, 162, 235, 1)',
                     borderWidth: 1
                 },
                 {
-                    label: 'B안 전환율',
-                    data: challengerConversionRates,
+                    label: 'B안 CVR (상세→구매)',
+                    data: challengerCvrDetail,
                     backgroundColor: 'rgba(255, 99, 132, 0.8)',
                     borderColor: 'rgba(255, 99, 132, 1)',
                     borderWidth: 1
                 },
                 {
-                    label: 'A안 클릭률',
-                    data: baselineClickRates,
+                    label: 'A안 CVR (클릭→구매)',
+                    data: baselineCvrClick,
                     backgroundColor: 'rgba(75, 192, 192, 0.8)',
                     borderColor: 'rgba(75, 192, 192, 1)',
                     borderWidth: 1
                 },
                 {
-                    label: 'B안 클릭률',
-                    data: challengerClickRates,
+                    label: 'B안 CVR (클릭→구매)',
+                    data: challengerCvrClick,
                     backgroundColor: 'rgba(255, 159, 64, 0.8)',
                     borderColor: 'rgba(255, 159, 64, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'A안 장바구니 추가율',
+                    data: baselineCartRate,
+                    backgroundColor: 'rgba(153, 102, 255, 0.8)',
+                    borderColor: 'rgba(153, 102, 255, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'B안 장바구니 추가율',
+                    data: challengerCartRate,
+                    backgroundColor: 'rgba(255, 205, 86, 0.8)',
+                    borderColor: 'rgba(255, 205, 86, 1)',
                     borderWidth: 1
                 }
             ]
@@ -634,16 +684,23 @@ async function loadRecentResults() {
                         <div class="result-comparison">
                             <div class="variant-stats">
                                 <h5>A안 (기존)</h5>
-                                <p>노출: ${result.baseline_impressions} | 클릭: ${result.baseline_clicks} | 구매: ${result.baseline_purchases}</p>
-                                <p>클릭률: ${(result.baseline_click_rate * 100).toFixed(1)}% | 전환율: ${(result.baseline_conversion_rate * 100).toFixed(1)}%</p>
+                                <p>상세 조회: ${result.baseline_detail_views} | 클릭: ${result.baseline_clicks} | 구매: ${result.baseline_purchases}</p>
+                                <p>장바구니: ${result.baseline_cart_adds} | 평균 세션: ${result.baseline_avg_session}초</p>
+                                <p>CVR(상세→구매): ${(result.baseline_cvr_detail * 100).toFixed(1)}% | CVR(클릭→구매): ${(result.baseline_cvr_click * 100).toFixed(1)}%</p>
+                                <p>장바구니율: ${(result.baseline_cart_rate * 100).toFixed(1)}% | 이탈률: ${(result.baseline_bounce_rate * 100).toFixed(1)}%</p>
                             </div>
                             <div class="variant-stats">
                                 <h5>B안 (AI)</h5>
-                                <p>노출: ${result.challenger_impressions} | 클릭: ${result.challenger_clicks} | 구매: ${result.challenger_purchases}</p>
-                                <p>클릭률: ${(result.challenger_click_rate * 100).toFixed(1)}% | 전환율: ${(result.challenger_conversion_rate * 100).toFixed(1)}%</p>
+                                <p>상세 조회: ${result.challenger_detail_views} | 클릭: ${result.challenger_clicks} | 구매: ${result.challenger_purchases}</p>
+                                <p>장바구니: ${result.challenger_cart_adds} | 평균 세션: ${result.challenger_avg_session}초</p>
+                                <p>CVR(상세→구매): ${(result.challenger_cvr_detail * 100).toFixed(1)}% | CVR(클릭→구매): ${(result.challenger_cvr_click * 100).toFixed(1)}%</p>
+                                <p>장바구니율: ${(result.challenger_cart_rate * 100).toFixed(1)}% | 이탈률: ${(result.challenger_bounce_rate * 100).toFixed(1)}%</p>
                             </div>
                         </div>
-                        ${result.improvement_rate !== 0 ? `<p class="improvement">개선율: ${result.improvement_rate > 0 ? '+' : ''}${result.improvement_rate}%</p>` : ''}
+                        ${result.improvement_rate !== 0 ? `<p class="improvement">CVR 개선율: ${result.improvement_rate > 0 ? '+' : ''}${result.improvement_rate}%</p>` : ''}
+                        <div class="performance-metrics">
+                            <small>A안 로드시간: ${result.baseline_load_time}초 | B안 로드시간: ${result.challenger_load_time}초</small>
+                        </div>
                     </div>
                 `;
             });
@@ -739,3 +796,4 @@ function manualRefresh() {
         showMessage('새로고침 중 오류가 발생했습니다.', 'error');
     });
 }
+

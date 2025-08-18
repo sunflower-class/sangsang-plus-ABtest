@@ -193,20 +193,24 @@ def abtest_list():
                 # status가 이미 문자열인지 확인
                 status_value = test.status.value if hasattr(test.status, 'value') else str(test.status)
                 
-                # 해당 테스트의 상호작용 데이터 집계
-                interactions = db.query(PerformanceLog).filter(
-                    PerformanceLog.ab_test_id == test.id
-                ).all()
+                # 해당 테스트의 변형들에서 새로운 지표 집계
+                from .models import Variant
+                variants = db.query(Variant).filter(Variant.ab_test_id == test.id).all()
                 
-                total_impressions = len([i for i in interactions if i.interaction_type == 'view'])
-                total_clicks = len([i for i in interactions if i.interaction_type == 'click'])
-                total_purchases = len([i for i in interactions if i.interaction_type == 'purchase'])
+                total_detail_views = sum(v.detail_page_views for v in variants)
+                total_clicks = sum(v.clicks for v in variants)
+                total_purchases = sum(v.purchases for v in variants)
+                total_unique_viewers = sum(v.unique_detail_viewers for v in variants)
+                total_unique_purchasers = sum(v.unique_purchasers for v in variants)
                 
-                # A/B 버전별 통계 계산
-                baseline_impressions = len([i for i in interactions if i.interaction_type == 'view' and i.variant_id == 1])
-                baseline_purchases = len([i for i in interactions if i.interaction_type == 'purchase' and i.variant_id == 1])
-                challenger_impressions = len([i for i in interactions if i.interaction_type == 'view' and i.variant_id == 2])
-                challenger_purchases = len([i for i in interactions if i.interaction_type == 'purchase' and i.variant_id == 2])
+                # A/B 버전별 통계 계산 (간단화)
+                baseline_variant = next((v for v in variants if v.variant_type == 'baseline'), None)
+                challenger_variant = next((v for v in variants if v.variant_type == 'challenger'), None)
+                
+                baseline_detail_views = baseline_variant.detail_page_views if baseline_variant else 0
+                baseline_unique_purchasers = baseline_variant.unique_purchasers if baseline_variant else 0
+                challenger_detail_views = challenger_variant.detail_page_views if challenger_variant else 0
+                challenger_unique_purchasers = challenger_variant.unique_purchasers if challenger_variant else 0
                 
                 result.append({
                     "id": test.id,
@@ -214,13 +218,17 @@ def abtest_list():
                     "status": status_value,
                     "created_at": test.created_at.isoformat(),
                     "product_id": test.product_id,
-                    "total_impressions": total_impressions,
+                    # 새로운 지표들
+                    "total_detail_views": total_detail_views,
                     "total_clicks": total_clicks,
                     "total_purchases": total_purchases,
-                    "baseline_impressions": baseline_impressions,
-                    "baseline_purchases": baseline_purchases,
-                    "challenger_impressions": challenger_impressions,
-                    "challenger_purchases": challenger_purchases,
+                    "total_unique_viewers": total_unique_viewers,
+                    "total_unique_purchasers": total_unique_purchasers,
+                    # A/B 버전별 데이터
+                    "baseline_detail_views": baseline_detail_views,
+                    "baseline_unique_purchasers": baseline_unique_purchasers,
+                    "challenger_detail_views": challenger_detail_views,
+                    "challenger_unique_purchasers": challenger_unique_purchasers,
                     "baseline_description": "기존 버전",
                     "challenger_description": "AI 생성 버전"
                 })
@@ -300,12 +308,13 @@ def abtest_logs():
 
 @app.get('/api/abtest/analytics/performance')
 def abtest_performance():
-    """A/B 테스트 성과 데이터"""
+    """A/B 테스트 성과 데이터 (새로운 지표 체계)"""
     try:
         from sqlalchemy.orm import Session
         from .database import SessionLocal
         from .models import ABTest, PerformanceLog, Variant
         from sqlalchemy import func
+        import numpy as np
         
         db = SessionLocal()
         try:
@@ -316,55 +325,75 @@ def abtest_performance():
                 # status가 이미 문자열인지 확인
                 status_value = test.status.value if hasattr(test.status, 'value') else str(test.status)
                 
-                # 해당 테스트의 상호작용 데이터 집계
-                interactions = db.query(PerformanceLog).filter(
-                    PerformanceLog.ab_test_id == test.id
-                ).all()
+                # 테스트의 변형들 가져오기
+                variants = db.query(Variant).filter(Variant.ab_test_id == test.id).all()
                 
-                # A안과 B안 별도 계산
-                baseline_impressions = len([i for i in interactions if i.interaction_type == 'view' and i.variant_id == 1])
-                baseline_clicks = len([i for i in interactions if i.interaction_type == 'click' and i.variant_id == 1])
-                baseline_purchases = len([i for i in interactions if i.interaction_type == 'purchase' and i.variant_id == 1])
+                baseline_variant = None
+                challenger_variant = None
                 
-                challenger_impressions = len([i for i in interactions if i.interaction_type == 'view' and i.variant_id == 2])
-                challenger_clicks = len([i for i in interactions if i.interaction_type == 'click' and i.variant_id == 2])
-                challenger_purchases = len([i for i in interactions if i.interaction_type == 'purchase' and i.variant_id == 2])
+                for variant in variants:
+                    if variant.variant_type == 'baseline':
+                        baseline_variant = variant
+                    elif variant.variant_type == 'challenger':
+                        challenger_variant = variant
                 
-                # A안과 B안 별도 전환율/클릭률 계산
-                baseline_click_rate = baseline_clicks / baseline_impressions if baseline_impressions > 0 else 0.0
-                baseline_conversion_rate = baseline_purchases / baseline_impressions if baseline_impressions > 0 else 0.0
+                if not baseline_variant or not challenger_variant:
+                    continue
                 
-                challenger_click_rate = challenger_clicks / challenger_impressions if challenger_impressions > 0 else 0.0
-                challenger_conversion_rate = challenger_purchases / challenger_impressions if challenger_impressions > 0 else 0.0
+                # 새로운 지표 계산
+                # A안 (baseline) 지표
+                baseline_cvr_detail = baseline_variant.unique_purchasers / max(baseline_variant.unique_detail_viewers, 1)
+                baseline_cvr_click = baseline_variant.purchases / max(baseline_variant.clicks, 1)
+                baseline_cart_rate = baseline_variant.unique_cart_adders / max(baseline_variant.unique_detail_viewers, 1)
+                baseline_avg_session = baseline_variant.total_session_duration / max(baseline_variant.session_count, 1)
+                baseline_bounce_rate = baseline_variant.bounced_sessions / max(baseline_variant.session_count, 1)
+                baseline_load_time = np.mean(baseline_variant.page_load_times) if baseline_variant.page_load_times else 0
                 
-                # 전체 통계 (참고용)
-                total_impressions = baseline_impressions + challenger_impressions
-                total_clicks = baseline_clicks + challenger_clicks
-                total_purchases = baseline_purchases + challenger_purchases
+                # B안 (challenger) 지표
+                challenger_cvr_detail = challenger_variant.unique_purchasers / max(challenger_variant.unique_detail_viewers, 1)
+                challenger_cvr_click = challenger_variant.purchases / max(challenger_variant.clicks, 1)
+                challenger_cart_rate = challenger_variant.unique_cart_adders / max(challenger_variant.unique_detail_viewers, 1)
+                challenger_avg_session = challenger_variant.total_session_duration / max(challenger_variant.session_count, 1)
+                challenger_bounce_rate = challenger_variant.bounced_sessions / max(challenger_variant.session_count, 1)
+                challenger_load_time = np.mean(challenger_variant.page_load_times) if challenger_variant.page_load_times else 0
+                
+                # 승자 결정 (핵심 지표인 CVR_detail_to_purchase 기준)
+                winner = "baseline" if baseline_cvr_detail > challenger_cvr_detail else "challenger" if challenger_cvr_detail > baseline_cvr_detail else "tie"
+                improvement_rate = round(((challenger_cvr_detail - baseline_cvr_detail) / baseline_cvr_detail * 100) if baseline_cvr_detail > 0 else 0, 1)
                 
                 result.append({
                     "product_name": test.name,
                     "status": status_value,
                     "test_id": test.id,
-                    # A안 데이터
-                    "baseline_impressions": baseline_impressions,
-                    "baseline_clicks": baseline_clicks,
-                    "baseline_purchases": baseline_purchases,
-                    "baseline_click_rate": round(baseline_click_rate, 3),
-                    "baseline_conversion_rate": round(baseline_conversion_rate, 3),
-                    # B안 데이터
-                    "challenger_impressions": challenger_impressions,
-                    "challenger_clicks": challenger_clicks,
-                    "challenger_purchases": challenger_purchases,
-                    "challenger_click_rate": round(challenger_click_rate, 3),
-                    "challenger_conversion_rate": round(challenger_conversion_rate, 3),
-                    # 전체 데이터 (참고용)
-                    "total_impressions": total_impressions,
-                    "total_clicks": total_clicks,
-                    "total_purchases": total_purchases,
-                    # 승자 정보
-                    "winner": "baseline" if baseline_conversion_rate > challenger_conversion_rate else "challenger" if challenger_conversion_rate > baseline_conversion_rate else "tie",
-                    "improvement_rate": round(((challenger_conversion_rate - baseline_conversion_rate) / baseline_conversion_rate * 100) if baseline_conversion_rate > 0 else 0, 1)
+                    # A안 새로운 지표
+                    "baseline_detail_views": baseline_variant.unique_detail_viewers,
+                    "baseline_clicks": baseline_variant.clicks,
+                    "baseline_purchases": baseline_variant.unique_purchasers,
+                    "baseline_cart_adds": baseline_variant.unique_cart_adders,
+                    "baseline_cvr_detail": round(baseline_cvr_detail, 3),
+                    "baseline_cvr_click": round(baseline_cvr_click, 3),
+                    "baseline_cart_rate": round(baseline_cart_rate, 3),
+                    "baseline_avg_session": round(baseline_avg_session, 1),
+                    "baseline_bounce_rate": round(baseline_bounce_rate, 3),
+                    "baseline_load_time": round(baseline_load_time, 2),
+                    # B안 새로운 지표
+                    "challenger_detail_views": challenger_variant.unique_detail_viewers,
+                    "challenger_clicks": challenger_variant.clicks,
+                    "challenger_purchases": challenger_variant.unique_purchasers,
+                    "challenger_cart_adds": challenger_variant.unique_cart_adders,
+                    "challenger_cvr_detail": round(challenger_cvr_detail, 3),
+                    "challenger_cvr_click": round(challenger_cvr_click, 3),
+                    "challenger_cart_rate": round(challenger_cart_rate, 3),
+                    "challenger_avg_session": round(challenger_avg_session, 1),
+                    "challenger_bounce_rate": round(challenger_bounce_rate, 3),
+                    "challenger_load_time": round(challenger_load_time, 2),
+                    # 전체 및 승자 정보
+                    "total_detail_views": baseline_variant.unique_detail_viewers + challenger_variant.unique_detail_viewers,
+                    "total_clicks": baseline_variant.clicks + challenger_variant.clicks,
+                    "total_purchases": baseline_variant.unique_purchasers + challenger_variant.unique_purchasers,
+                    "total_revenue": baseline_variant.revenue + challenger_variant.revenue,
+                    "winner": winner,
+                    "improvement_rate": improvement_rate
                 })
             
             print(f"Found {len(result)} performance data in database")
@@ -422,15 +451,38 @@ def abtest_interaction_post(interaction: dict):
             
             db.add(log)
             
-            # Variant 테이블의 통계 업데이트
-            if interaction_type == 'view':
-                variant.impressions += 1
+            # Variant 테이블의 새로운 지표 업데이트
+            if interaction_type == 'view_detail':
+                variant.detail_page_views += 1
+                variant.unique_detail_viewers += 1  # 간단화 (실제로는 중복 제거 필요)
             elif interaction_type == 'click':
                 variant.clicks += 1
             elif interaction_type == 'purchase':
                 variant.purchases += 1
+                variant.unique_purchasers += 1  # 간단화
                 # 구매 시 수익 추가 (테스트용으로 1000원 고정)
                 variant.revenue += 1000
+            elif interaction_type == 'add_to_cart':
+                variant.add_to_carts += 1
+                variant.unique_cart_adders += 1  # 간단화
+            elif interaction_type == 'session_start':
+                variant.session_count += 1
+            elif interaction_type == 'session_end':
+                # 메타데이터에서 세션 지속시간 추출
+                metadata = json.loads(interaction.get('metadata', '{}'))
+                session_duration = metadata.get('session_duration', 30)  # 기본값 30초
+                variant.total_session_duration += session_duration
+            elif interaction_type == 'bounce':
+                variant.bounced_sessions += 1
+            elif interaction_type == 'page_load':
+                # 페이지 로드 시간 기록
+                metadata = json.loads(interaction.get('metadata', '{}'))
+                load_time = metadata.get('load_time', 1.5)  # 기본값 1.5초
+                if variant.page_load_times is None:
+                    variant.page_load_times = []
+                variant.page_load_times.append(load_time)
+            elif interaction_type == 'error':
+                variant.error_count += 1
             
             db.commit()
             
@@ -485,16 +537,44 @@ def get_test_variants(test_id: int):
             
             result = []
             for variant in variants:
+                # 새로운 지표 계산
+                cvr_detail_to_purchase = variant.unique_purchasers / max(variant.unique_detail_viewers, 1)
+                cvr_click_to_purchase = variant.purchases / max(variant.clicks, 1)
+                cart_add_rate = variant.unique_cart_adders / max(variant.unique_detail_viewers, 1)
+                avg_session_duration = variant.total_session_duration / max(variant.session_count, 1)
+                bounce_rate = variant.bounced_sessions / max(variant.session_count, 1)
+                
+                import numpy as np
+                avg_page_load_time = np.mean(variant.page_load_times) if variant.page_load_times else 0
+                error_rate = variant.error_count / max(variant.detail_page_views, 1)
+                
                 result.append({
                     "id": variant.id,
                     "name": variant.name,
                     "content": variant.content,
                     "is_active": variant.is_active,
                     "is_winner": variant.is_winner,
-                    "impressions": variant.impressions,
+                    # 새로운 지표들
+                    "detail_page_views": variant.detail_page_views,
                     "clicks": variant.clicks,
                     "purchases": variant.purchases,
-                    "revenue": float(variant.revenue) if variant.revenue else 0.0
+                    "add_to_carts": variant.add_to_carts,
+                    "revenue": float(variant.revenue) if variant.revenue else 0.0,
+                    "unique_detail_viewers": variant.unique_detail_viewers,
+                    "unique_purchasers": variant.unique_purchasers,
+                    "unique_cart_adders": variant.unique_cart_adders,
+                    "session_count": variant.session_count,
+                    "bounced_sessions": variant.bounced_sessions,
+                    "total_session_duration": float(variant.total_session_duration),
+                    "error_count": variant.error_count,
+                    # 계산된 지표들
+                    "cvr_detail_to_purchase": cvr_detail_to_purchase,
+                    "cvr_click_to_purchase": cvr_click_to_purchase,
+                    "cart_add_rate": cart_add_rate,
+                    "avg_session_duration": avg_session_duration,
+                    "bounce_rate": bounce_rate,
+                    "avg_page_load_time": avg_page_load_time,
+                    "error_rate": error_rate
                 })
             
             print(f"Found {len(result)} variants for test {test_id}")

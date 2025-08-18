@@ -116,34 +116,52 @@ class ABTestService:
             variants = self.db.query(Variant).filter(Variant.ab_test_id == test_id).all()
             
             if len(variants) < 2:
-                return {"ctr": 0.3, "cvr": 0.4, "revenue": 0.3}  # 기본값
+                # 새로운 기본 가중치
+                return {
+                    "cvr_detail_to_purchase": 0.5,
+                    "cvr_click_to_purchase": 0.2,
+                    "cart_add_rate": 0.2,
+                    "session_duration": 0.1
+                }
             
             # 각 지표별 성과 분석
-            ctr_values = [v.clicks / max(v.impressions, 1) for v in variants]
-            cvr_values = [v.purchases / max(v.impressions, 1) for v in variants]
-            revenue_values = [v.revenue / max(v.impressions, 1) for v in variants]
+            cvr_detail_values = [v.unique_purchasers / max(v.unique_detail_viewers, 1) for v in variants]
+            cvr_click_values = [v.purchases / max(v.clicks, 1) for v in variants]
+            cart_rate_values = [v.unique_cart_adders / max(v.unique_detail_viewers, 1) for v in variants]
+            session_values = [v.total_session_duration / max(v.session_count, 1) for v in variants]
             
             # 변동성 계산 (높은 변동성 = 높은 가중치)
-            ctr_variance = np.var(ctr_values) if len(ctr_values) > 1 else 0.001
-            cvr_variance = np.var(cvr_values) if len(cvr_values) > 1 else 0.001
-            revenue_variance = np.var(revenue_values) if len(revenue_values) > 1 else 0.001
+            cvr_detail_variance = np.var(cvr_detail_values) if len(cvr_detail_values) > 1 else 0.001
+            cvr_click_variance = np.var(cvr_click_values) if len(cvr_click_values) > 1 else 0.001
+            cart_variance = np.var(cart_rate_values) if len(cart_rate_values) > 1 else 0.001
+            session_variance = np.var(session_values) if len(session_values) > 1 else 0.001
             
             # 가중치 정규화
-            total_variance = ctr_variance + cvr_variance + revenue_variance
+            total_variance = cvr_detail_variance + cvr_click_variance + cart_variance + session_variance
             if total_variance == 0:
-                return {"ctr": 0.3, "cvr": 0.4, "revenue": 0.3}
+                return {
+                    "cvr_detail_to_purchase": 0.5,
+                    "cvr_click_to_purchase": 0.2,
+                    "cart_add_rate": 0.2,
+                    "session_duration": 0.1
+                }
             
             weights = {
-                "ctr": ctr_variance / total_variance,
-                "cvr": cvr_variance / total_variance,
-                "revenue": revenue_variance / total_variance
+                "cvr_detail_to_purchase": cvr_detail_variance / total_variance,
+                "cvr_click_to_purchase": cvr_click_variance / total_variance,
+                "cart_add_rate": cart_variance / total_variance,
+                "session_duration": session_variance / total_variance
             }
             
-            # 최소 가중치 보장
-            min_weight = 0.1
+            # 최소 가중치 보장 및 핵심 지표 우선순위
+            min_weight = 0.05
             for key in weights:
                 if weights[key] < min_weight:
                     weights[key] = min_weight
+            
+            # 핵심 지표인 cvr_detail_to_purchase는 최소 30% 보장
+            if weights["cvr_detail_to_purchase"] < 0.3:
+                weights["cvr_detail_to_purchase"] = 0.3
             
             # 정규화
             total = sum(weights.values())
@@ -154,29 +172,47 @@ class ABTestService:
             
         except Exception as e:
             logger.error(f"AI 가중치 계산 실패: {e}")
-            return {"ctr": 0.3, "cvr": 0.4, "revenue": 0.3}
+            return {
+                "cvr_detail_to_purchase": 0.5,
+                "cvr_click_to_purchase": 0.2,
+                "cart_add_rate": 0.2,
+                "session_duration": 0.1
+            }
 
     def calculate_variant_ai_score(self, variant: Variant, weights: Dict[str, float]) -> float:
-        """개별 버전의 AI 점수 계산"""
+        """개별 버전의 AI 점수 계산 (새로운 지표 체계)"""
         try:
-            # 기본 지표 계산
-            ctr = variant.clicks / max(variant.impressions, 1)
-            cvr = variant.purchases / max(variant.impressions, 1)
-            revenue_per_impression = variant.revenue / max(variant.impressions, 1)
+            # 새로운 지표 계산
+            cvr_detail_to_purchase = variant.unique_purchasers / max(variant.unique_detail_viewers, 1)
+            cvr_click_to_purchase = variant.purchases / max(variant.clicks, 1)
+            cart_add_rate = variant.unique_cart_adders / max(variant.unique_detail_viewers, 1)
+            avg_session_duration = variant.total_session_duration / max(variant.session_count, 1)
             
             # 가드레일 체크
-            if variant.bounce_rate > 0.8:  # 이탈률이 너무 높으면 페널티
+            bounce_rate = variant.bounced_sessions / max(variant.session_count, 1)
+            avg_page_load_time = np.mean(variant.page_load_times) if variant.page_load_times else 0
+            error_rate = variant.error_count / max(variant.detail_page_views, 1)
+            
+            # 가드레일 위반 시 페널티
+            if bounce_rate > 0.7:  # 이탈률이 70% 초과
+                return 0.0
+            if avg_page_load_time > 3.0:  # 페이지 로드 시간이 3초 초과
+                return 0.0
+            if error_rate > 0.05:  # 오류율이 5% 초과
+                return 0.0
+            if avg_session_duration < 10:  # 평균 세션 시간이 10초 미만
                 return 0.0
             
-            # AI 점수 계산
+            # AI 점수 계산 (새로운 가중치 적용)
             score = (
-                ctr * weights.get("ctr", 0.3) +
-                cvr * weights.get("cvr", 0.4) +
-                revenue_per_impression * weights.get("revenue", 0.3)
+                cvr_detail_to_purchase * weights.get("cvr_detail_to_purchase", 0.5) +
+                cvr_click_to_purchase * weights.get("cvr_click_to_purchase", 0.2) +
+                cart_add_rate * weights.get("cart_add_rate", 0.2) +
+                (avg_session_duration / 100) * weights.get("session_duration", 0.1)  # 정규화
             )
             
             # 신뢰도 계산 (샘플 크기 기반)
-            confidence = min(variant.impressions / 1000, 1.0)  # 최대 1000개 기준
+            confidence = min(variant.unique_detail_viewers / 100, 1.0)  # 최대 100명 기준
             
             # 점수 업데이트
             variant.ai_score = score
@@ -331,8 +367,8 @@ class ABTestService:
             log = PerformanceLog(**log_data)
             self.db.add(log)
             
-            # 실시간 지표 업데이트
-            self._update_variant_metrics(log_data['variant_id'], log_data['interaction_type'])
+            # 실시간 지표 업데이트 (새로운 파라미터 추가)
+            self._update_variant_metrics(log_data['variant_id'], log_data['interaction_type'], log_data)
             
             self.db.commit()
             return log
@@ -342,37 +378,53 @@ class ABTestService:
             logger.error(f"상호작용 로그 기록 실패: {e}")
             raise
 
-    def _update_variant_metrics(self, variant_id: int, interaction_type: str):
-        """버전별 실시간 지표 업데이트"""
+    def _update_variant_metrics(self, variant_id: int, interaction_type: str, log_data: Dict[str, Any] = None):
+        """버전별 실시간 지표 업데이트 (새로운 지표 체계)"""
         variant = self.db.query(Variant).filter(Variant.id == variant_id).first()
         if not variant:
             return
 
         # 상호작용 타입별 카운터 증가
-        if interaction_type == InteractionType.IMPRESSION:
-            variant.impressions += 1
+        if interaction_type == InteractionType.VIEW_DETAIL:
+            variant.detail_page_views += 1
+            # 사용자 기반 카운트 (중복 제거 로직은 실제로는 더 복잡)
+            variant.unique_detail_viewers += 1  # 간단화, 실제로는 user_id 기반 중복 제거 필요
         elif interaction_type == InteractionType.CLICK:
             variant.clicks += 1
         elif interaction_type == InteractionType.PURCHASE:
             variant.purchases += 1
+            variant.unique_purchasers += 1  # 간단화
+            # 매출 업데이트
+            if log_data and 'revenue' in log_data.get('interaction_metadata', {}):
+                variant.revenue += log_data['interaction_metadata']['revenue']
+        elif interaction_type == InteractionType.ADD_TO_CART:
+            variant.add_to_carts += 1
+            variant.unique_cart_adders += 1  # 간단화
+        elif interaction_type == InteractionType.SESSION_START:
+            variant.session_count += 1
+        elif interaction_type == InteractionType.SESSION_END:
+            # 세션 지속시간 업데이트
+            if log_data and 'session_duration' in log_data.get('interaction_metadata', {}):
+                variant.total_session_duration += log_data['interaction_metadata']['session_duration']
+        elif interaction_type == InteractionType.BOUNCE:
+            variant.bounced_sessions += 1
+        elif interaction_type == InteractionType.PAGE_LOAD:
+            # 페이지 로드 시간 기록
+            if log_data and 'load_time' in log_data.get('interaction_metadata', {}):
+                load_time = log_data['interaction_metadata']['load_time']
+                if variant.page_load_times is None:
+                    variant.page_load_times = []
+                variant.page_load_times.append(load_time)
+        elif interaction_type == InteractionType.ERROR:
+            variant.error_count += 1
 
         # 지표 재계산
         self._recalculate_variant_metrics(variant)
 
     def _recalculate_variant_metrics(self, variant: Variant):
-        """버전 지표 재계산"""
-        # CTR 계산
-        variant.ctr = variant.clicks / variant.impressions if variant.impressions > 0 else 0
-        
-        # CVR 계산
-        variant.cvr = variant.purchases / variant.impressions if variant.impressions > 0 else 0
-        
-        # 이탈률 계산 (실제로는 세션 데이터 필요)
-        # 여기서는 간단한 예시 - 더 현실적인 값으로 조정
-        variant.bounce_rate = 0.2  # 20% 이탈률로 조정
-        
-        # 평균 세션 지속시간 설정 (실제로는 세션 데이터 필요)
-        variant.avg_session_duration = 45.0  # 45초로 설정
+        """버전 지표 재계산 (새로운 지표 체계)"""
+        # 실제 계산된 지표들은 이미 개별 함수에서 사용되므로 여기서는 로깅만
+        logger.debug(f"버전 {variant.id} 지표 재계산 완료")
 
     def determine_winner(self, test_id: int) -> Optional[int]:
         """승자 결정 로직"""
@@ -421,31 +473,42 @@ class ABTestService:
             raise
 
     def _calculate_variant_metrics(self, variant: Variant, weights: Dict[str, float]) -> VariantMetrics:
-        """버전별 지표 계산"""
-        # 기본 지표
-        ctr = variant.clicks / variant.impressions if variant.impressions > 0 else 0
-        cvr = variant.purchases / variant.impressions if variant.impressions > 0 else 0
-        revenue_per_user = variant.revenue / variant.impressions if variant.impressions > 0 else 0
+        """버전별 지표 계산 (새로운 지표 체계)"""
+        # 새로운 지표 계산
+        cvr_detail_to_purchase = variant.unique_purchasers / max(variant.unique_detail_viewers, 1)
+        cvr_click_to_purchase = variant.purchases / max(variant.clicks, 1)
+        cart_add_rate = variant.unique_cart_adders / max(variant.unique_detail_viewers, 1)
+        avg_session_duration = variant.total_session_duration / max(variant.session_count, 1)
+        bounce_rate = variant.bounced_sessions / max(variant.session_count, 1)
+        avg_page_load_time = np.mean(variant.page_load_times) if variant.page_load_times else 0
+        error_rate = variant.error_count / max(variant.detail_page_views, 1)
 
         # 가중치 적용된 점수 계산
         score = (
-            weights.get('ctr', 0.3) * ctr +
-            weights.get('cvr', 0.4) * cvr +
-            weights.get('revenue', 0.3) * revenue_per_user
+            weights.get('cvr_detail_to_purchase', 0.5) * cvr_detail_to_purchase +
+            weights.get('cvr_click_to_purchase', 0.2) * cvr_click_to_purchase +
+            weights.get('cart_add_rate', 0.2) * cart_add_rate +
+            weights.get('session_duration', 0.1) * (avg_session_duration / 100)  # 정규화
         )
 
         return VariantMetrics(
             variant_id=variant.id,
             variant_name=variant.name,
-            impressions=variant.impressions,
+            detail_page_views=variant.detail_page_views,
             clicks=variant.clicks,
             purchases=variant.purchases,
+            add_to_carts=variant.add_to_carts,
             revenue=variant.revenue,
-            ctr=ctr,
-            cvr=cvr,
-            revenue_per_user=revenue_per_user,
-            bounce_rate=variant.bounce_rate,
-            avg_session_duration=variant.avg_session_duration,
+            unique_detail_viewers=variant.unique_detail_viewers,
+            unique_purchasers=variant.unique_purchasers,
+            unique_cart_adders=variant.unique_cart_adders,
+            cvr_detail_to_purchase=cvr_detail_to_purchase,
+            cvr_click_to_purchase=cvr_click_to_purchase,
+            cart_add_rate=cart_add_rate,
+            avg_session_duration=avg_session_duration,
+            bounce_rate=bounce_rate,
+            avg_page_load_time=avg_page_load_time,
+            error_rate=error_rate,
             score=score
         )
 
@@ -643,10 +706,13 @@ class ABTestService:
                 confidence_level=None,
                 test_duration_days=ab_test.test_duration_days,
                 days_remaining=days_remaining,
-                total_impressions=sum(v.impressions for v in variants),
+                total_detail_page_views=sum(v.detail_page_views for v in variants),
                 total_clicks=sum(v.clicks for v in variants),
                 total_purchases=sum(v.purchases for v in variants),
-                total_revenue=sum(v.revenue for v in variants)
+                total_add_to_carts=sum(v.add_to_carts for v in variants),
+                total_revenue=sum(v.revenue for v in variants),
+                total_unique_viewers=sum(v.unique_detail_viewers for v in variants),
+                total_unique_purchasers=sum(v.unique_purchasers for v in variants)
             )
 
         except Exception as e:

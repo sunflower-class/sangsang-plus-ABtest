@@ -397,7 +397,7 @@ function startAutoSimulation() {
         if (interactionQueue.length > 0) {
             processBatch(interactionQueue.splice(0)); // 큐 비우기
         }
-    }, 1000); // 1초마다 배치 처리
+    }, 2000); // 2초마다 배치 처리 (리소스 부족 방지)
     
     function simulateVisitor(speedConfig) {
         if (!simulationState.isRunning) return;
@@ -405,28 +405,8 @@ function startAutoSimulation() {
         // 랜덤하게 버전 선택 (50:50)
         const version = Math.random() < 0.5 ? 'A' : 'B';
         
-        // 방문자 타입별 행동 패턴 (더 현실적)
-        const visitorType = getVisitorType();
-        const behavior = getVisitorBehavior(visitorType);
-        
-        // 즉시 노출 기록 (배치 큐에 추가)
-        addToQueue(version, 'view');
-        
-        // 클릭 확률 (방문자 타입별 차등)
-        if (Math.random() < behavior.clickRate) {
-            const [clickMin, clickMax] = speedConfig.delays.click;
-            setTimeout(() => {
-                addToQueue(version, 'click');
-                
-                // 구매 확률 (클릭한 사람 중)
-                if (Math.random() < behavior.purchaseRate) {
-                    const [purchaseMin, purchaseMax] = speedConfig.delays.purchase;
-                    setTimeout(() => {
-                        addToQueue(version, 'purchase');
-                    }, Math.random() * (purchaseMax - purchaseMin) + purchaseMin);
-                }
-            }, Math.random() * (clickMax - clickMin) + clickMin);
-        }
+        // 새로운 사용자 여정 시뮬레이션 실행
+        simulateNewUserJourney(version);
     }
     
     function getVisitorType() {
@@ -492,10 +472,14 @@ function startAutoSimulation() {
                 try {
                     await recordInteractionToServer(version, type);
                     updatePerformanceMetrics(true); // 성공
-                    await new Promise(resolve => setTimeout(resolve, 30)); // 30ms로 단축 (고속 처리)
+                    await new Promise(resolve => setTimeout(resolve, 100)); // 100ms로 증가 (리소스 부족 방지)
                 } catch (error) {
                     updatePerformanceMetrics(false); // 실패
-                    console.warn('배치 처리 중 오류 (계속 진행):', error.message);
+                    if (error.message.includes('ERR_INSUFFICIENT_RESOURCES')) {
+                        console.warn('리소스 부족으로 인한 요청 실패. 잠시 후 재시도됩니다.');
+                    } else {
+                        console.warn('배치 처리 중 오류 (계속 진행):', error.message);
+                    }
                 }
             }
         }
@@ -640,39 +624,51 @@ async function recordInteraction(version, interactionType) {
 function updateStats() {
     const stats = simulationState.stats;
     
-    // 기본 통계
-    document.getElementById('viewsA').textContent = stats.versionA.views;
+    // 기본 통계 (새로운 지표 이름으로 업데이트)
+    document.getElementById('viewsA').textContent = stats.versionA.views; // 상세페이지 조회수
     document.getElementById('viewsB').textContent = stats.versionB.views;
-    document.getElementById('clicksA').textContent = stats.versionA.clicks;
+    document.getElementById('clicksA').textContent = stats.versionA.clicks; // 클릭수 
     document.getElementById('clicksB').textContent = stats.versionB.clicks;
-    document.getElementById('purchasesA').textContent = stats.versionA.purchases;
+    document.getElementById('purchasesA').textContent = stats.versionA.purchases; // 구매수
     document.getElementById('purchasesB').textContent = stats.versionB.purchases;
     
-    // 클릭률 계산 (노출 대비 클릭) - 노출당 클릭 비율
+    // 새로운 지표 계산
+    // CVR (상세페이지 → 구매) - 핵심 지표
+    const cvrDetailA = stats.versionA.views > 0 ? (stats.versionA.purchases / stats.versionA.views * 100) : 0;
+    const cvrDetailB = stats.versionB.views > 0 ? (stats.versionB.purchases / stats.versionB.views * 100) : 0;
+    
+    // CVR (클릭 → 구매) - 보조 지표  
+    const cvrClickA = stats.versionA.clicks > 0 ? (stats.versionA.purchases / stats.versionA.clicks * 100) : 0;
+    const cvrClickB = stats.versionB.clicks > 0 ? (stats.versionB.purchases / stats.versionB.clicks * 100) : 0;
+    
+    // 클릭률 (상세페이지 → 클릭)
     const clickRateA = stats.versionA.views > 0 ? (stats.versionA.clicks / stats.versionA.views * 100) : 0;
     const clickRateB = stats.versionB.views > 0 ? (stats.versionB.clicks / stats.versionB.views * 100) : 0;
+    // 표시 업데이트 (새로운 지표 이름)
+    document.getElementById('conversionA').textContent = `${cvrDetailA.toFixed(2)}%`;
+    document.getElementById('conversionB').textContent = `${cvrDetailB.toFixed(2)}%`;
     
-    // 전환율 계산 (노출 대비 구매) - 노출당 구매 비율
-    const conversionA = stats.versionA.views > 0 ? (stats.versionA.purchases / stats.versionA.views * 100) : 0;
-    const conversionB = stats.versionB.views > 0 ? (stats.versionB.purchases / stats.versionB.views * 100) : 0;
+    // 추가 지표 표시 (HTML에 요소가 있다면)
+    const cvrClickElementA = document.getElementById('cvrClickA');
+    const cvrClickElementB = document.getElementById('cvrClickB');
+    if (cvrClickElementA) cvrClickElementA.textContent = `${cvrClickA.toFixed(2)}%`;
+    if (cvrClickElementB) cvrClickElementB.textContent = `${cvrClickB.toFixed(2)}%`;
     
-    // 구매 전환율 계산 (클릭 대비 구매) - 클릭당 구매 비율
-    const purchaseRateA = stats.versionA.clicks > 0 ? (stats.versionA.purchases / stats.versionA.clicks * 100) : 0;
-    const purchaseRateB = stats.versionB.clicks > 0 ? (stats.versionB.purchases / stats.versionB.clicks * 100) : 0;
+    const clickRateElementA = document.getElementById('clickRateA');
+    const clickRateElementB = document.getElementById('clickRateB');
+    if (clickRateElementA) clickRateElementA.textContent = `${clickRateA.toFixed(2)}%`;
+    if (clickRateElementB) clickRateElementB.textContent = `${clickRateB.toFixed(2)}%`;
     
-    document.getElementById('conversionA').textContent = `${conversionA.toFixed(2)}%`;
-    document.getElementById('conversionB').textContent = `${conversionB.toFixed(2)}%`;
-    
-    // 개선율 계산
-    const improvement = conversionA > 0 ? ((conversionB - conversionA) / conversionA * 100) : 0;
+    // 개선율 계산 (핵심 CVR 기준)
+    const improvement = cvrDetailA > 0 ? ((cvrDetailB - cvrDetailA) / cvrDetailA * 100) : 0;
     document.getElementById('improvement').textContent = `${improvement.toFixed(2)}%`;
     
     // 통계적 유의성 계산 (간단한 버전)
     const significance = calculateSignificance(stats);
     document.getElementById('significance').textContent = significance;
     
-    // 색상 변경으로 승자 표시
-    updateWinnerDisplay(conversionA, conversionB);
+    // 색상 변경으로 승자 표시 (새로운 CVR 기준)
+    updateWinnerDisplay(cvrDetailA, cvrDetailB);
 }
 
 // 통계적 유의성 계산 (간단한 버전)
@@ -836,24 +832,148 @@ function openTestHistory() {
     window.open('dashboard.html?view=history', '_blank');
 }
 
-// 키보드 단축키
+// 지연 함수
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// 새로운 상호작용 타입들을 위한 향상된 시뮬레이션 함수
+async function simulateNewUserJourney(version) {
+    try {
+        const speedConfig = simulationState.speedSettings[simulationState.currentSpeed];
+        
+        // 1. 세션 시작
+        await recordInteractionWithMetadata(version, 'session_start', {
+            session_duration: 0,
+            user_agent: 'Simulator'
+        });
+        
+        // 2. 페이지 로드 (로드 시간 시뮬레이션)
+        const loadTime = Math.random() * 3 + 0.5; // 0.5~3.5초
+        await recordInteractionWithMetadata(version, 'page_load', {
+            load_time: loadTime
+        });
+        
+        // 3. 상세 페이지 방문
+        await recordInteraction(version, 'view_detail');
+        
+        // 4. 클릭 (80% 확률)
+        if (Math.random() < 0.8) {
+            await delay(Math.random() * speedConfig.delays.click[1] + speedConfig.delays.click[0]);
+            await recordInteraction(version, 'click');
+            
+            // 5. 장바구니 추가 (40% 확률)
+            if (Math.random() < 0.4) {
+                await delay(Math.random() * 1000 + 500);
+                await recordInteraction(version, 'add_to_cart');
+                
+                // 6. 구매 (60% 확률)
+                if (Math.random() < 0.6) {
+                    await delay(Math.random() * speedConfig.delays.purchase[1] + speedConfig.delays.purchase[0]);
+                    await recordInteractionWithMetadata(version, 'purchase', {
+                        revenue: Math.floor(Math.random() * 50000) + 10000 // 1만원~6만원
+                    });
+                }
+            }
+        } else {
+            // 7. 이탈 (클릭하지 않고 떠남)
+            await delay(Math.random() * 2000 + 1000);
+            await recordInteraction(version, 'bounce');
+        }
+        
+        // 8. 세션 종료
+        const sessionDuration = Math.random() * 120 + 10; // 10~130초
+        await recordInteractionWithMetadata(version, 'session_end', {
+            session_duration: sessionDuration
+        });
+        
+        // 9. 가끔 오류 발생 (5% 확률)
+        if (Math.random() < 0.05) {
+            await recordInteractionWithMetadata(version, 'error', {
+                error_type: 'JavaScript Error',
+                error_message: 'Simulated error'
+            });
+        }
+        
+    } catch (error) {
+        console.error('사용자 여정 시뮬레이션 오류:', error);
+    }
+}
+
+// 메타데이터와 함께 상호작용 기록
+async function recordInteractionWithMetadata(version, interactionType, metadata = {}) {
+    try {
+        const response = await fetch('http://localhost:8000/api/abtest/interaction', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                test_id: simulationState.testId,
+                variant: version === 'A' ? 'baseline' : 'challenger',
+                interaction_type: interactionType,
+                metadata: JSON.stringify(metadata),
+                timestamp: new Date().toISOString()
+            })
+        });
+        
+        if (response.ok) {
+            // 로컬 통계 업데이트 (새로운 지표 체계)
+            updateLocalStats(version, interactionType);
+            updatePerformanceMetrics(true);
+        } else {
+            throw new Error(`HTTP ${response.status}`);
+        }
+    } catch (error) {
+        updatePerformanceMetrics(false);
+        throw error;
+    }
+}
+
+// 로컬 통계 업데이트 (새로운 지표 대응)
+function updateLocalStats(version, interactionType) {
+    const versionKey = `version${version}`;
+    
+    switch (interactionType) {
+        case 'view_detail':
+            simulationState.stats[versionKey].views++;
+            break;
+        case 'click':
+            simulationState.stats[versionKey].clicks++;
+            break;
+        case 'purchase':
+            simulationState.stats[versionKey].purchases++;
+            break;
+        case 'add_to_cart':
+            // 새로운 통계 (필요시 추가)
+            break;
+    }
+}
+
+// 키보드 단축키 (새로운 지표 대응)
 document.addEventListener('keydown', function(event) {
     switch(event.key) {
         case '1':
-            recordInteraction('A', 'view');
+            recordInteraction('A', 'view_detail');
             break;
         case '2':
-            recordInteraction('B', 'view');
+            recordInteraction('B', 'view_detail');
             break;
         case 'q':
-            recordInteraction('A', 'click');
-            recordInteraction('A', 'purchase');
+            // A안 전체 여정 시뮬레이션
+            simulateNewUserJourney('A');
             break;
         case 'w':
-            recordInteraction('B', 'click');
-            recordInteraction('B', 'purchase');
+            // B안 전체 여정 시뮬레이션
+            simulateNewUserJourney('B');
+            break;
+        case 'e':
+            recordInteraction('A', 'add_to_cart');
             break;
         case 'r':
+            recordInteraction('B', 'add_to_cart');
+            break;
+        case 't':
             resetSimulation();
             break;
         case 's':

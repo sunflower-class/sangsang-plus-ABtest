@@ -13,12 +13,22 @@ class ABTestCreate(BaseModel):
     traffic_split_ratio: float = Field(0.5, description="트래픽 분배 비율")
     min_sample_size: int = Field(1000, description="최소 샘플 크기")
     weights: Dict[str, float] = Field(
-        default={"ctr": 0.3, "cvr": 0.4, "revenue": 0.3},
-        description="지표 가중치"
+        default={
+            "cvr_detail_to_purchase": 0.5,  # 핵심: 상세페이지 방문 → 구매 전환율
+            "cvr_click_to_purchase": 0.2,   # 보조: 클릭 → 구매 전환율  
+            "cart_add_rate": 0.2,           # 보조: 장바구니 추가율
+            "session_duration": 0.1         # 보조: 세션 지속시간
+        },
+        description="새로운 지표 가중치"
     )
     guardrail_metrics: Dict[str, Any] = Field(
-        default={"bounce_rate_threshold": 0.8, "session_duration_min": 30},
-        description="가드레일 지표 설정"
+        default={
+            "bounce_rate_threshold": 0.7,      # 이탈률 임계값 (70%)
+            "avg_page_load_time_max": 3.0,     # 평균 페이지 로드 시간 최대값 (3초)
+            "error_rate_threshold": 0.05,      # 오류 발생률 임계값 (5%)
+            "min_session_duration": 10         # 최소 세션 지속시간 (10초)
+        },
+        description="새로운 가드레일 지표 설정"
     )
 
 class ABTestResponse(BaseModel):
@@ -54,12 +64,32 @@ class VariantResponse(BaseModel):
     name: str
     content: Dict[str, Any]
     content_hash: str
-    impressions: int
+    
+    # 새로운 지표 체계
+    detail_page_views: int
     clicks: int
     purchases: int
+    add_to_carts: int
     revenue: float
-    bounce_rate: float
-    avg_session_duration: float
+    
+    # 사용자 기반 카운트
+    unique_detail_viewers: int
+    unique_purchasers: int
+    unique_cart_adders: int
+    
+    # 세션 및 행동 지표
+    total_session_duration: float
+    session_count: int
+    bounced_sessions: int
+    
+    # 가드레일 지표
+    page_load_times: List[float]
+    error_count: int
+    
+    # AI 점수
+    ai_score: float
+    ai_confidence: float
+    
     is_active: bool
     is_winner: bool
     created_at: datetime
@@ -110,15 +140,28 @@ class TestResultResponse(BaseModel):
 class VariantMetrics(BaseModel):
     variant_id: int
     variant_name: str
-    impressions: int
+    
+    # 기본 카운트
+    detail_page_views: int
     clicks: int
     purchases: int
+    add_to_carts: int
     revenue: float
-    ctr: float  # Click Through Rate
-    cvr: float  # Conversion Rate
-    revenue_per_user: float
-    bounce_rate: float
-    avg_session_duration: float
+    
+    # 사용자 기반 카운트
+    unique_detail_viewers: int
+    unique_purchasers: int
+    unique_cart_adders: int
+    
+    # 계산된 지표
+    cvr_detail_to_purchase: float   # 핵심: 구매 완료 사용자 수 / 상세 페이지 방문 사용자 수
+    cvr_click_to_purchase: float    # 보조: 구매 수 / 클릭 수
+    cart_add_rate: float            # 장바구니 추가율: 장바구니 추가 사용자 수 / 상세 페이지 방문 사용자 수
+    avg_session_duration: float     # 평균 세션 지속시간
+    bounce_rate: float              # 이탈률
+    avg_page_load_time: float       # 평균 페이지 로드 시간
+    error_rate: float               # 오류 발생률
+    
     score: float  # 가중치 적용된 최종 점수
 
 class ABTestAnalytics(BaseModel):
@@ -131,10 +174,15 @@ class ABTestAnalytics(BaseModel):
     confidence_level: Optional[float]
     test_duration_days: int
     days_remaining: Optional[int]
-    total_impressions: int
+    
+    # 새로운 총합 지표
+    total_detail_page_views: int
     total_clicks: int
     total_purchases: int
+    total_add_to_carts: int
     total_revenue: float
+    total_unique_viewers: int
+    total_unique_purchasers: int
 
 # --- AI 콘텐츠 생성 관련 스키마 ---
 
