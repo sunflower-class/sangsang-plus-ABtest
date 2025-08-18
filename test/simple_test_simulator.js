@@ -7,7 +7,22 @@ let simulationState = {
         versionB: { views: 0, clicks: 0, purchases: 0 }
     },
     autoSimulation: null,
-    dashboardUpdateInterval: null
+    batchProcessor: null,
+    dashboardUpdateInterval: null,
+    currentSpeed: 'fast', // 기본 속도
+    performanceMetrics: {
+        lastInteractionTime: Date.now(),
+        totalInteractions: 0,
+        serverErrors: 0,
+        lastTPS: 0,
+        tpsHistory: []
+    },
+    speedSettings: {
+        slow: { interval: 4000, visitors: [1, 2], delays: { click: [500, 1500], purchase: [1000, 3000] } },
+        normal: { interval: 2000, visitors: [1, 3], delays: { click: [300, 800], purchase: [500, 1500] } },
+        fast: { interval: 800, visitors: [1, 3], delays: { click: [100, 400], purchase: [200, 700] } },
+        turbo: { interval: 300, visitors: [2, 5], delays: { click: [50, 200], purchase: [100, 300] } }
+    }
 };
 
 // 실시간 상태 업데이트
@@ -16,7 +31,9 @@ function updateRealTimeStatus() {
     const statusElement = document.getElementById('simulationStatus');
     if (statusElement) {
         if (simulationState.isRunning) {
-            statusElement.textContent = '실행 중';
+            const speedConfig = simulationState.speedSettings[simulationState.currentSpeed];
+            const estimatedVPM = Math.round(60000 / speedConfig.interval * 2.5);
+            statusElement.textContent = `실행 중 (${simulationState.currentSpeed.toUpperCase()}, ~${estimatedVPM}/분)`;
             statusElement.style.color = '#38a169';
         } else {
             statusElement.textContent = '대기 중';
@@ -27,15 +44,84 @@ function updateRealTimeStatus() {
     // 총 상호작용 수 업데이트
     const totalElement = document.getElementById('totalInteractions');
     if (totalElement) {
-        const total = simulationState.stats.versionA.views + simulationState.stats.versionA.purchases + 
-                     simulationState.stats.versionB.views + simulationState.stats.versionB.purchases;
+        const total = simulationState.stats.versionA.views + simulationState.stats.versionA.clicks + simulationState.stats.versionA.purchases + 
+                     simulationState.stats.versionB.views + simulationState.stats.versionB.clicks + simulationState.stats.versionB.purchases;
         totalElement.textContent = total;
     }
+    
+    // TPS 업데이트
+    updateTPSDisplay();
+    
+    // 서버 응답 상태 업데이트
+    updateServerResponseStatus();
     
     // 마지막 업데이트 시간
     const lastUpdateElement = document.getElementById('lastUpdate');
     if (lastUpdateElement) {
         lastUpdateElement.textContent = new Date().toLocaleTimeString();
+    }
+}
+
+// TPS 계산 및 표시
+function updateTPSDisplay() {
+    const tpsElement = document.getElementById('transactionsPerSecond');
+    if (tpsElement) {
+        tpsElement.textContent = simulationState.performanceMetrics.lastTPS.toFixed(1);
+        
+        // TPS에 따른 색상 변경
+        if (simulationState.performanceMetrics.lastTPS > 10) {
+            tpsElement.style.color = '#38a169'; // 높음 - 녹색
+        } else if (simulationState.performanceMetrics.lastTPS > 5) {
+            tpsElement.style.color = '#d69e2e'; // 중간 - 노랑
+        } else {
+            tpsElement.style.color = '#667eea'; // 낮음 - 파랑
+        }
+    }
+}
+
+// 서버 응답 상태 업데이트
+function updateServerResponseStatus() {
+    const serverElement = document.getElementById('serverResponse');
+    if (serverElement) {
+        const errorRate = simulationState.performanceMetrics.serverErrors / Math.max(simulationState.performanceMetrics.totalInteractions, 1);
+        
+        if (errorRate === 0) {
+            serverElement.textContent = '정상';
+            serverElement.style.color = '#38a169';
+        } else if (errorRate < 0.05) {
+            serverElement.textContent = '경고';
+            serverElement.style.color = '#d69e2e';
+        } else {
+            serverElement.textContent = '오류';
+            serverElement.style.color = '#e53e3e';
+        }
+    }
+}
+
+// 성능 메트릭 업데이트
+function updatePerformanceMetrics(success = true) {
+    const now = Date.now();
+    simulationState.performanceMetrics.totalInteractions++;
+    
+    if (!success) {
+        simulationState.performanceMetrics.serverErrors++;
+    }
+    
+    // TPS 계산 (5초 간격으로)
+    const timeDiff = now - simulationState.performanceMetrics.lastInteractionTime;
+    if (timeDiff >= 5000) { // 5초마다 TPS 재계산
+        const newTPS = simulationState.performanceMetrics.totalInteractions / (timeDiff / 1000);
+        simulationState.performanceMetrics.lastTPS = newTPS;
+        simulationState.performanceMetrics.tpsHistory.push(newTPS);
+        
+        // 히스토리 크기 제한 (최대 20개)
+        if (simulationState.performanceMetrics.tpsHistory.length > 20) {
+            simulationState.performanceMetrics.tpsHistory.shift();
+        }
+        
+        // 리셋
+        simulationState.performanceMetrics.lastInteractionTime = now;
+        simulationState.performanceMetrics.totalInteractions = 0;
     }
 }
 
@@ -248,7 +334,9 @@ function startSimulation() {
         // 실시간 상태 업데이트
         updateRealTimeStatus();
         
-        showNotification('시뮬레이션이 시작되었습니다! 실시간으로 데이터가 생성되고 대시보드에 반영됩니다.', 'success');
+        const speedConfig = simulationState.speedSettings[simulationState.currentSpeed];
+        const estimatedVPM = Math.round(60000 / speedConfig.interval * 2.5);
+        showNotification(`🚀 ${simulationState.currentSpeed.toUpperCase()} 모드로 시뮬레이션 시작! 예상 분당 방문자: ${estimatedVPM}명`, 'success');
     }
 }
 
@@ -263,6 +351,11 @@ function stopSimulation() {
         simulationState.autoSimulation = null;
     }
     
+    if (simulationState.batchProcessor) {
+        clearInterval(simulationState.batchProcessor);
+        simulationState.batchProcessor = null;
+    }
+    
     if (simulationState.dashboardUpdateInterval) {
         clearInterval(simulationState.dashboardUpdateInterval);
         simulationState.dashboardUpdateInterval = null;
@@ -274,31 +367,162 @@ function stopSimulation() {
     showNotification('시뮬레이션이 중지되었습니다.', 'info');
 }
 
-// 자동 시뮬레이션
+// 자동 시뮬레이션 (동적 속도 조절)
 function startAutoSimulation() {
+    // 배치 처리를 위한 큐
+    let interactionQueue = [];
+    let batchCounter = 0;
+    
+    // 현재 속도 설정 가져오기
+    const speedConfig = simulationState.speedSettings[simulationState.currentSpeed];
+    
+    // 동적 속도로 방문자 생성
     simulationState.autoSimulation = setInterval(() => {
+        if (!simulationState.isRunning) return;
+        
+        // 방문자 수 범위에서 랜덤 선택
+        const [minVisitors, maxVisitors] = speedConfig.visitors;
+        const visitorCount = Math.floor(Math.random() * (maxVisitors - minVisitors + 1)) + minVisitors;
+        
+        for (let i = 0; i < visitorCount; i++) {
+            // 각 방문자별로 약간의 시간차를 두고 처리
+            setTimeout(() => {
+                simulateVisitor(speedConfig);
+            }, i * (speedConfig.interval / visitorCount / 4)); // 균등 분산
+        }
+    }, speedConfig.interval); // 설정된 간격으로 방문자 그룹 생성
+    
+    // 배치 처리용 타이머 (서버 부하 감소)
+    simulationState.batchProcessor = setInterval(() => {
+        if (interactionQueue.length > 0) {
+            processBatch(interactionQueue.splice(0)); // 큐 비우기
+        }
+    }, 1000); // 1초마다 배치 처리
+    
+    function simulateVisitor(speedConfig) {
         if (!simulationState.isRunning) return;
         
         // 랜덤하게 버전 선택 (50:50)
         const version = Math.random() < 0.5 ? 'A' : 'B';
         
-        // 노출 기록
-        recordInteraction(version, 'view');
+        // 방문자 타입별 행동 패턴 (더 현실적)
+        const visitorType = getVisitorType();
+        const behavior = getVisitorBehavior(visitorType);
         
-        // 노출 후 일정 확률로 클릭 시뮬레이션 (30% 확률)
-        if (Math.random() < 0.3) {
+        // 즉시 노출 기록 (배치 큐에 추가)
+        addToQueue(version, 'view');
+        
+        // 클릭 확률 (방문자 타입별 차등)
+        if (Math.random() < behavior.clickRate) {
+            const [clickMin, clickMax] = speedConfig.delays.click;
             setTimeout(() => {
-                recordInteraction(version, 'click');
+                addToQueue(version, 'click');
                 
-                // 클릭 후 일정 확률로 구매 시뮬레이션 (20% 확률)
-                if (Math.random() < 0.2) {
+                // 구매 확률 (클릭한 사람 중)
+                if (Math.random() < behavior.purchaseRate) {
+                    const [purchaseMin, purchaseMax] = speedConfig.delays.purchase;
                     setTimeout(() => {
-                        recordInteraction(version, 'purchase');
-                    }, Math.random() * 2000 + 1000); // 1-3초 후 구매
+                        addToQueue(version, 'purchase');
+                    }, Math.random() * (purchaseMax - purchaseMin) + purchaseMin);
                 }
-            }, Math.random() * 1000 + 500); // 0.5-1.5초 후 클릭
+            }, Math.random() * (clickMax - clickMin) + clickMin);
         }
-    }, 4000); // 4초마다 새로운 방문자 (더 현실적인 간격)
+    }
+    
+    function getVisitorType() {
+        const rand = Math.random();
+        if (rand < 0.6) return 'casual';      // 60% - 일반 방문자
+        if (rand < 0.85) return 'interested'; // 25% - 관심 있는 방문자  
+        return 'buyer';                       // 15% - 구매 의향 높은 방문자
+    }
+    
+    function getVisitorBehavior(type) {
+        const behaviors = {
+            casual: { clickRate: 0.15, purchaseRate: 0.05 },     // 낮은 참여도
+            interested: { clickRate: 0.45, purchaseRate: 0.25 }, // 중간 참여도
+            buyer: { clickRate: 0.80, purchaseRate: 0.60 }       // 높은 참여도
+        };
+        return behaviors[type];
+    }
+    
+    function addToQueue(version, interactionType) {
+        // 로컬 통계 즉시 업데이트 (UI 반응성)
+        if (interactionType === 'view') {
+            simulationState.stats[`version${version}`].views++;
+        } else if (interactionType === 'click') {
+            simulationState.stats[`version${version}`].clicks++;
+        } else if (interactionType === 'purchase') {
+            simulationState.stats[`version${version}`].purchases++;
+        }
+        
+        // 성능 메트릭 업데이트
+        updatePerformanceMetrics(true);
+        
+        // 서버 전송용 큐에 추가
+        interactionQueue.push({
+            version: version,
+            type: interactionType,
+            timestamp: Date.now()
+        });
+        
+        // UI 업데이트 (15번에 1번으로 빈도 증가 - 고속 모드 대응)
+        batchCounter++;
+        if (batchCounter % 15 === 0) {
+            updateStats();
+            updateDashboardIfOpen();
+        }
+    }
+    
+    async function processBatch(batch) {
+        if (batch.length === 0) return;
+        
+        // 같은 타입끼리 그룹화하여 효율적 처리
+        const grouped = batch.reduce((acc, item) => {
+            const key = `${item.version}-${item.type}`;
+            acc[key] = (acc[key] || 0) + 1;
+            return acc;
+        }, {});
+        
+        // 그룹별로 순차 처리 (서버 부하 분산)
+        for (const [key, count] of Object.entries(grouped)) {
+            const [version, type] = key.split('-');
+            
+            // 여러 번 발생한 같은 상호작용을 한 번에 처리
+            for (let i = 0; i < count; i++) {
+                try {
+                    await recordInteractionToServer(version, type);
+                    updatePerformanceMetrics(true); // 성공
+                    await new Promise(resolve => setTimeout(resolve, 30)); // 30ms로 단축 (고속 처리)
+                } catch (error) {
+                    updatePerformanceMetrics(false); // 실패
+                    console.warn('배치 처리 중 오류 (계속 진행):', error.message);
+                }
+            }
+        }
+    }
+    
+    async function recordInteractionToServer(version, interactionType) {
+        if (!simulationState.testId) return;
+        
+        try {
+            const response = await fetch('http://localhost:8000/api/abtest/interaction', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    test_id: simulationState.testId,
+                    variant: version === 'A' ? 'baseline' : 'challenger',
+                    interaction_type: interactionType,
+                    timestamp: new Date().toISOString()
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+        } catch (error) {
+            throw error;
+        }
+    }
 }
 
 // 대시보드 실시간 업데이트 시작
@@ -506,7 +730,17 @@ function resetSimulation() {
         versionB: { views: 0, clicks: 0, purchases: 0 }
     };
     
+    // 성능 메트릭 초기화
+    simulationState.performanceMetrics = {
+        lastInteractionTime: Date.now(),
+        totalInteractions: 0,
+        serverErrors: 0,
+        lastTPS: 0,
+        tpsHistory: []
+    };
+    
     updateStats();
+    updateRealTimeStatus();
     showNotification('시뮬레이션이 초기화되었습니다.', 'info');
 }
 
@@ -630,10 +864,38 @@ document.addEventListener('keydown', function(event) {
     }
 });
 
+// 속도 변경 함수
+function changeSimulationSpeed() {
+    const speedSelect = document.getElementById('speedControl');
+    const newSpeed = speedSelect.value;
+    simulationState.currentSpeed = newSpeed;
+    
+    showNotification(`시뮬레이션 속도가 "${speedSelect.options[speedSelect.selectedIndex].text}"로 변경되었습니다.`, 'info');
+    
+    // 시뮬레이션이 실행 중이면 재시작
+    if (simulationState.isRunning) {
+        // 기존 간격 정리
+        if (simulationState.autoSimulation) {
+            clearInterval(simulationState.autoSimulation);
+            simulationState.autoSimulation = null;
+        }
+        
+        // 새로운 속도로 재시작
+        startAutoSimulation();
+        
+        const speedConfig = simulationState.speedSettings[newSpeed];
+        const estimatedVisitorsPerMinute = Math.round(60000 / speedConfig.interval * 2.5); // 평균 방문자 수
+        showNotification(`🚀 새로운 속도로 재시작! 예상 분당 방문자: ${estimatedVisitorsPerMinute}명`, 'success');
+    }
+}
+
 // 페이지 언로드 시 정리
 window.addEventListener('beforeunload', function() {
     if (simulationState.autoSimulation) {
         clearInterval(simulationState.autoSimulation);
+    }
+    if (simulationState.batchProcessor) {
+        clearInterval(simulationState.batchProcessor);
     }
     if (simulationState.dashboardUpdateInterval) {
         clearInterval(simulationState.dashboardUpdateInterval);

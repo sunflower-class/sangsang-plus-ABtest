@@ -249,10 +249,21 @@
                     💡 완료된 테스트는 회색으로 표시되며 선택할 수 없습니다.
                 </div>
             </div>
-            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
                 <button class="control-btn btn-start" onclick="startSimulation()">시뮬레이션 시작</button>
                 <button class="control-btn btn-reset" onclick="resetSimulation()">초기화</button>
                 <button class="control-btn" onclick="resetTestData()" style="background: #e53e3e; color: white;">테스트 데이터 초기화</button>
+                
+                <!-- 속도 조절 컨트롤 -->
+                <div style="display: flex; align-items: center; gap: 10px; margin-left: 20px; padding: 8px 12px; background: #f7fafc; border-radius: 8px;">
+                    <label style="font-size: 0.9rem; color: #4a5568; font-weight: 600;">⚡ 속도:</label>
+                    <select id="speedControl" onchange="changeSimulationSpeed()" style="padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 4px; background: white;">
+                        <option value="slow">🐌 느림 (4초)</option>
+                        <option value="normal">🚶 보통 (2초)</option>
+                        <option value="fast" selected>🏃 빠름 (0.8초)</option>
+                        <option value="turbo">🚀 터보 (0.3초)</option>
+                    </select>
+                </div>
             </div>
             <div style="display: flex; gap: 10px; margin-bottom: 15px;">
                 <button class="control-btn" onclick="openDashboard()" style="background: #38a169; color: white;">📊 대시보드 열기</button>
@@ -261,7 +272,7 @@
             </div>
             <div style="background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
                 <h4 style="margin: 0 0 10px 0; color: #2d3748;">🔄 실시간 상태</h4>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.9rem;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; font-size: 0.9rem;">
                     <div>
                         <strong>시뮬레이션 상태:</strong> 
                         <span id="simulationStatus" style="color: #718096;">대기 중</span>
@@ -271,12 +282,20 @@
                         <span id="dashboardConnection" style="color: #718096;">확인 중...</span>
                     </div>
                     <div>
+                        <strong>평균 TPS:</strong> 
+                        <span id="transactionsPerSecond" style="color: #667eea;">0.0</span>
+                    </div>
+                    <div>
                         <strong>마지막 업데이트:</strong> 
                         <span id="lastUpdate" style="color: #718096;">-</span>
                     </div>
                     <div>
                         <strong>총 상호작용:</strong> 
                         <span id="totalInteractions" style="color: #718096;">0</span>
+                    </div>
+                    <div>
+                        <strong>서버 응답:</strong> 
+                        <span id="serverResponse" style="color: #38a169;">정상</span>
                     </div>
                 </div>
             </div>
