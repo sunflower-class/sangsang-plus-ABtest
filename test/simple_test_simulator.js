@@ -397,7 +397,7 @@ function startAutoSimulation() {
         if (interactionQueue.length > 0) {
             processBatch(interactionQueue.splice(0)); // 큐 비우기
         }
-    }, 1000); // 1초마다 배치 처리
+    }, 2000); // 2초마다 배치 처리 (리소스 부족 방지)
     
     function simulateVisitor(speedConfig) {
         if (!simulationState.isRunning) return;
@@ -492,10 +492,14 @@ function startAutoSimulation() {
                 try {
                     await recordInteractionToServer(version, type);
                     updatePerformanceMetrics(true); // 성공
-                    await new Promise(resolve => setTimeout(resolve, 30)); // 30ms로 단축 (고속 처리)
+                    await new Promise(resolve => setTimeout(resolve, 100)); // 100ms로 증가 (리소스 부족 방지)
                 } catch (error) {
                     updatePerformanceMetrics(false); // 실패
-                    console.warn('배치 처리 중 오류 (계속 진행):', error.message);
+                    if (error.message.includes('ERR_INSUFFICIENT_RESOURCES')) {
+                        console.warn('리소스 부족으로 인한 요청 실패. 잠시 후 재시도됩니다.');
+                    } else {
+                        console.warn('배치 처리 중 오류 (계속 진행):', error.message);
+                    }
                 }
             }
         }
