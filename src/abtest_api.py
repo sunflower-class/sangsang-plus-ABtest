@@ -197,16 +197,39 @@ async def get_ai_analysis(
         
         for variant in variants:
             score = service.calculate_variant_ai_score(variant, weights)
+            
+            # 새로운 지표 계산
+            cvr_detail_to_purchase = variant.unique_purchasers / max(variant.unique_detail_viewers, 1)
+            cvr_click_to_purchase = variant.purchases / max(variant.clicks, 1)
+            cart_add_rate = variant.unique_cart_adders / max(variant.unique_detail_viewers, 1)
+            avg_session_duration = variant.total_session_duration / max(variant.session_count, 1)
+            bounce_rate = variant.bounced_sessions / max(variant.session_count, 1)
+            
+            import numpy as np
+            avg_page_load_time = np.mean(variant.page_load_times) if variant.page_load_times else 0
+            error_rate = variant.error_count / max(variant.detail_page_views, 1)
+            
             analysis = {
                 "variant_id": variant.id,
                 "variant_name": variant.name,
                 "ai_score": score,
                 "ai_confidence": variant.ai_confidence,
-                "ctr": variant.clicks / max(variant.impressions, 1),
-                "cvr": variant.purchases / max(variant.impressions, 1),
-                "revenue_per_impression": variant.revenue / max(variant.impressions, 1),
-                "bounce_rate": variant.bounce_rate,
-                "impressions": variant.impressions
+                # 새로운 지표들
+                "cvr_detail_to_purchase": cvr_detail_to_purchase,
+                "cvr_click_to_purchase": cvr_click_to_purchase,
+                "cart_add_rate": cart_add_rate,
+                "avg_session_duration": avg_session_duration,
+                "bounce_rate": bounce_rate,
+                "avg_page_load_time": avg_page_load_time,
+                "error_rate": error_rate,
+                # 기본 카운트
+                "detail_page_views": variant.detail_page_views,
+                "clicks": variant.clicks,
+                "purchases": variant.purchases,
+                "add_to_carts": variant.add_to_carts,
+                "unique_detail_viewers": variant.unique_detail_viewers,
+                "unique_purchasers": variant.unique_purchasers,
+                "unique_cart_adders": variant.unique_cart_adders
             }
             variant_analysis.append(analysis)
         
@@ -477,23 +500,38 @@ async def delete_ab_test(
 async def get_analytics_overview(
     db: Session = Depends(get_db)
 ):
-    """전체 분석 데이터 개요"""
+    """전체 분석 데이터 개요 (새로운 지표 체계)"""
     try:
-        from .models import ABTest, PerformanceLog
+        from .models import ABTest, PerformanceLog, Variant
         from sqlalchemy import func
         
         total_tests = db.query(ABTest).count()
         active_tests = db.query(ABTest).filter(ABTest.status == TestStatus.ACTIVE).count()
         total_interactions = db.query(PerformanceLog).count()
         
-        # 간단한 전환율 계산 (실제로는 더 복잡)
-        conversion_rate = 0.05  # 5% 가정
+        # 새로운 지표 계산
+        variants = db.query(Variant).all()
+        
+        total_detail_viewers = sum(v.unique_detail_viewers for v in variants)
+        total_purchasers = sum(v.unique_purchasers for v in variants)
+        total_cart_adders = sum(v.unique_cart_adders for v in variants)
+        total_revenue = sum(v.revenue for v in variants)
+        
+        # 핵심 전환율: 상세 페이지 방문 → 구매
+        conversion_rate = total_purchasers / max(total_detail_viewers, 1)
+        
+        # 장바구니 추가율
+        cart_add_rate = total_cart_adders / max(total_detail_viewers, 1)
         
         return {
             "total_tests": total_tests,
             "active_tests": active_tests,
             "total_interactions": total_interactions,
-            "conversion_rate": conversion_rate
+            "conversion_rate": conversion_rate,  # 새로운 CVR 정의
+            "cart_add_rate": cart_add_rate,      # 새로운 지표
+            "total_detail_viewers": total_detail_viewers,
+            "total_purchasers": total_purchasers,
+            "total_revenue": total_revenue
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"분석 데이터 조회 실패: {str(e)}")

@@ -106,7 +106,7 @@
 
             <!-- 성과 지표 -->
             <div class="card">
-                <h2>📈 성과 지표</h2>
+                <h2>📈 새로운 지표 체계</h2>
                 <div class="metrics-grid">
                     <div class="metric">
                         <span class="metric-value" id="totalTests">0</span>
@@ -117,19 +117,27 @@
                         <span class="metric-label">활성 테스트</span>
                     </div>
                     <div class="metric">
-                        <span class="metric-value" id="totalInteractions">0</span>
-                        <span class="metric-label">총 상호작용</span>
+                        <span class="metric-value" id="totalDetailViewers">0</span>
+                        <span class="metric-label">총 상세 조회자</span>
                     </div>
                     <div class="metric">
                         <span class="metric-value" id="conversionRate">0%</span>
-                        <span class="metric-label">전환율</span>
+                        <span class="metric-label">핵심 CVR (상세→구매)</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-value" id="cartAddRate">0%</span>
+                        <span class="metric-label">장바구니 추가율</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-value" id="totalRevenue">0원</span>
+                        <span class="metric-label">총 매출</span>
                     </div>
                 </div>
             </div>
 
             <!-- 차트 섹션 -->
             <div class="card full-width">
-                <h2>📊 성과 비교 차트</h2>
+                <h2>📊 새로운 지표 성과 비교 차트</h2>
                 <div class="chart-container" style="height: 400px !important; max-height: 400px !important; overflow: hidden;">
                     <canvas id="performanceChart" style="height: 400px !important; max-height: 400px !important;"></canvas>
                 </div>
