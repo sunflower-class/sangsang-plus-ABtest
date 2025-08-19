@@ -1,8 +1,8 @@
-"""Initial A/B test tables
+"""Initial A/B test tables with complete schema
 
-Revision ID: 01f2fd7ed39e
+Revision ID: 97033cde847a
 Revises: 
-Create Date: 2025-08-16 15:06:01.067858
+Create Date: 2025-08-19 05:41:21.827297
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '01f2fd7ed39e'
+revision = '97033cde847a'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -24,6 +24,13 @@ def upgrade() -> None:
     sa.Column('description', sa.Text(), nullable=True),
     sa.Column('product_id', sa.String(length=100), nullable=False),
     sa.Column('status', sa.String(length=50), nullable=True),
+    sa.Column('baseline_image_url', sa.String(length=500), nullable=True),
+    sa.Column('challenger_image_url', sa.String(length=500), nullable=True),
+    sa.Column('ai_winner_variant_id', sa.Integer(), nullable=True),
+    sa.Column('user_selected_winner_id', sa.Integer(), nullable=True),
+    sa.Column('winner_selection_deadline', sa.DateTime(), nullable=True),
+    sa.Column('test_cycle_number', sa.Integer(), nullable=True),
+    sa.Column('parent_test_id', sa.Integer(), nullable=True),
     sa.Column('test_duration_days', sa.Integer(), nullable=True),
     sa.Column('traffic_split_ratio', sa.Float(), nullable=True),
     sa.Column('min_sample_size', sa.Integer(), nullable=True),
@@ -52,6 +59,8 @@ def upgrade() -> None:
     sa.Column('revenue', sa.Float(), nullable=True),
     sa.Column('bounce_rate', sa.Float(), nullable=True),
     sa.Column('avg_session_duration', sa.Float(), nullable=True),
+    sa.Column('ai_score', sa.Float(), nullable=True),
+    sa.Column('ai_confidence', sa.Float(), nullable=True),
     sa.Column('is_active', sa.Boolean(), nullable=True),
     sa.Column('is_winner', sa.Boolean(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),

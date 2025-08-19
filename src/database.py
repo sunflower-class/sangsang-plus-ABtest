@@ -12,8 +12,13 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./abtest.db")
 if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(
         DATABASE_URL,
-        connect_args={"check_same_thread": False},
+        connect_args={
+            "check_same_thread": False,
+            "isolation_level": None  # autocommit 모드
+        },
         poolclass=StaticPool,
+        pool_pre_ping=True,  # 연결 유효성 검사
+        echo=False  # SQL 로깅 비활성화
     )
 else:
     # PostgreSQL을 사용하는 경우 (운영용)
@@ -30,8 +35,15 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
+
+def get_db_session():
+    """데이터베이스 세션 반환 (컨텍스트 매니저용)"""
+    return SessionLocal()
 
 # 초기 테이블 생성
 create_tables()

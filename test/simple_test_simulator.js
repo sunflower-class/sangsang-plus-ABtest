@@ -271,8 +271,8 @@ async function loadSelectedTestInfo(testId) {
             document.getElementById('titleB').textContent = test.product_name || '상품 B';
             
             // 버전별 설명 업데이트
-            document.getElementById('descA').textContent = test.baseline_description || '기존 버전의 상품 설명입니다.';
-            document.getElementById('descB').textContent = test.challenger_description || 'AI가 생성한 새로운 버전의 상품 설명입니다.';
+            document.getElementById('descA').textContent = test.baseline_description || 'A안 - AI가 생성한 상품 설명입니다.';
+            document.getElementById('descB').textContent = test.challenger_description || 'B안 - AI가 생성한 상품 설명입니다.';
             
             // 가격 정보 업데이트
             document.getElementById('priceA').textContent = `₩${test.baseline_price || '1,200,000'}`;

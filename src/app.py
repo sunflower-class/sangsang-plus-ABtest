@@ -175,10 +175,10 @@ def abtest_list():
     """A/B 테스트 목록 조회"""
     try:
         from sqlalchemy.orm import Session
-        from .database import SessionLocal
+        from .database import get_db_session
         from .models import ABTest, PerformanceLog
         
-        db = SessionLocal()
+        db = get_db_session()
         try:
             tests = db.query(ABTest).all()
             
@@ -215,19 +215,22 @@ def abtest_list():
                     "baseline_purchases": baseline_purchases,
                     "challenger_impressions": challenger_impressions,
                     "challenger_purchases": challenger_purchases,
-                    "baseline_description": "기존 버전",
-                    "challenger_description": "AI 생성 버전"
+                    "baseline_description": "A안 (기준)",
+                    "challenger_description": "B안 (도전)"
                 })
             
             print(f"Found {len(result)} tests in database")
             return {"tests": result}
+        except Exception as e:
+            db.rollback()
+            raise e
         finally:
             db.close()
     except Exception as e:
         print(f"Error in abtest_list: {e}")
         import traceback
         traceback.print_exc()
-        return []
+        return {"tests": []}
 
 @app.get('/api/abtest/results')
 def abtest_results():
