@@ -384,6 +384,7 @@ async function loadCurrentTests() {
                             <button onclick="viewTestDetails(${test.id})" class="btn-secondary">상세보기</button>
                             ${test.status === 'active' ? `<button onclick="requestAIWinnerDetermination(${test.id})" class="btn-primary">AI 승자 결정</button>` : ''}
                             ${test.status === 'waiting_for_winner_selection' ? `<button onclick="showWinnerSelection(${test.id})" class="btn-winner">승자 선택</button>` : ''}
+                            <button onclick="deleteTest(${test.id}, '${test.name.replace(/'/g, "\\'")}')" class="btn-danger" style="background: #e53e3e; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8rem; cursor: pointer; margin-left: 5px;">삭제</button>
                         </div>
                     </div>
                 `;
@@ -737,19 +738,25 @@ async function loadLogs() {
     }
 }
 
-async function cleanupOldTests() {
+// 개별 테스트 삭제
+async function deleteTest(testId, testName) {
+    if (!confirm(`"${testName}" 테스트를 정말 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) {
+        return;
+    }
+    
     try {
-        const response = await fetch(`${API_BASE_URL}/cleanup`, {
+        showMessage('테스트를 삭제하는 중...', 'info');
+        
+        const response = await fetch(`${API_BASE_URL}/test/${testId}`, {
             method: 'DELETE'
         });
         
         if (response.ok) {
-            const result = await response.json();
-            showMessage(result.message, 'success');
+            showMessage(`테스트 "${testName}"가 성공적으로 삭제되었습니다.`, 'success');
             loadCurrentTests();
         } else {
             const error = await response.json();
-            showMessage(`정리 실패: ${error.detail}`, 'error');
+            showMessage(`테스트 삭제 실패: ${error.detail}`, 'error');
         }
     } catch (error) {
         showMessage(`오류 발생: ${error.message}`, 'error');

@@ -6,11 +6,7 @@
 
 ### 🌐 웹 기반 테스트 도구
 
-#### `index.html` - 메인 인덱스 페이지
-- 모든 테스트 도구에 대한 중앙 집중식 접근점
-- 서버 상태 모니터링
-- 시스템 정보 대시보드
-- 빠른 액션 버튼들
+
 
 #### `dashboard.html` - 실시간 대시보드
 - **기능**: 실시간 A/B 테스트 현황 모니터링
@@ -35,17 +31,6 @@
   3. 실시간 통계 확인
   4. 키보드 단축키: `1/2` (노출), `q/w` (구매), `r` (초기화), `s` (시작)
 
-#### `api_test_runner.html` - API 테스트 러너
-- **기능**: 체계적인 API 엔드포인트 테스트
-- **테스트 분류**:
-  - **기본 테스트**: 서버 상태, 테스트 생성, 목록 조회, 상호작용 기록
-  - **고급 테스트**: 분석 데이터, 결과 조회, 로그, 스케줄러
-  - **성능 테스트**: 대량 데이터 생성, 동시 요청 처리
-- **특징**:
-  - 자동화된 테스트 스위트
-  - 실시간 결과 표시
-  - 성공률 및 통계
-  - 진행률 바
 
 ### 📄 스타일 및 스크립트 파일
 
@@ -64,25 +49,9 @@
 - 통계 계산
 - 실시간 업데이트
 
-#### `api_test_runner.js` - API 테스트 기능
-- 테스트 실행 엔진
-- 결과 수집 및 표시
-- 성능 측정
 
-### 🐍 Python 테스트 파일 (기존)
 
-#### `test_abtest_api.py` - API 통합 테스트
-- 모든 API 엔드포인트 테스트
-- 데이터 검증
-- 오류 처리 테스트
 
-#### `generate_more_data.py` - 테스트 데이터 생성
-- 대량의 상호작용 데이터 생성
-- 다양한 시나리오 테스트
-
-#### `check_analytics.py` - 분석 데이터 확인
-- 분석 결과 검증
-- 성과 지표 확인
 
 ## 🚀 사용 방법
 
@@ -92,22 +61,14 @@
 python -m uvicorn src.app:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 2. 웹 도구 접근
+### 2. 웹 도구 접근 (완료!)
 ```bash
 # 브라우저에서 다음 URL들 접근
-http://localhost:8000/test/index.html          # 메인 인덱스
-http://localhost:8000/test/dashboard.html      # 대시보드
+http://localhost:8000/test/dashboard.html              # 메인 대시보드 (추천)
 http://localhost:8000/test/simple_test_simulator.html  # 시뮬레이터
-http://localhost:8000/test/api_test_runner.html        # API 테스트
 ```
 
-### 3. Python 테스트 실행
-```bash
-# test 폴더에서
-python test_abtest_api.py
-python generate_more_data.py
-python check_analytics.py
-```
+
 
 ## 🎯 주요 기능
 

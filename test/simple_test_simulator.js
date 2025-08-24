@@ -731,18 +731,18 @@ function getInteractionDisplayName(interactionType) {
 
 // 메타데이터와 함께 서버로 전송
 async function recordInteractionToServerWithMetadata(version, interactionType, metadata = {}) {
-    const response = await fetch('http://localhost:8000/api/abtest/interaction', {
-        method: 'POST',
+        const response = await fetch('http://localhost:8000/api/abtest/interaction', {
+            method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            test_id: simulationState.testId,
-            variant: version === 'A' ? 'baseline' : 'challenger',
-            interaction_type: interactionType,
+            body: JSON.stringify({
+                test_id: simulationState.testId,
+                variant: version === 'A' ? 'baseline' : 'challenger',
+                interaction_type: interactionType,
             metadata: metadata,
-            timestamp: new Date().toISOString()
-        })
-    });
-    
+                timestamp: new Date().toISOString()
+            })
+        });
+        
     if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
     }
@@ -906,7 +906,7 @@ function showNotification(message, type = 'info') {
     // 3초 후 자동 제거
     setTimeout(() => {
         if (notification.parentNode) {
-            notification.remove();
+        notification.remove();
         }
     }, 3000);
 }
@@ -980,8 +980,8 @@ async function simulateVisitor(version) {
                 // 4-a. 장바구니에서 구매 (40% 확률)
                 if (Math.random() < 0.4) {
                     await simulateInteractionWithMetadata(version, 'purchase', { purchase_type: 'from_cart' });
-                }
-            } else {
+            }
+        } else {
                 // 3-b. 직접 구매 (15% 확률)
                 if (Math.random() < 0.15) {
                     await simulateInteractionWithMetadata(version, 'purchase', { purchase_type: 'direct' });
@@ -1003,7 +1003,7 @@ async function simulateVisitor(version) {
 async function simulateInteraction(version, interactionType) {
     try {
         // 로컬 상태 업데이트
-        updateLocalStats(version, interactionType);
+            updateLocalStats(version, interactionType);
         
         // 서버에 전송
         await recordInteractionToServer(version, interactionType);
@@ -1076,8 +1076,8 @@ function resetSimulation() {
         simulationState.isRunning = false;
         
         // 자동 시뮬레이션 중지
-        if (simulationState.autoSimulation) {
-            clearInterval(simulationState.autoSimulation);
+    if (simulationState.autoSimulation) {
+        clearInterval(simulationState.autoSimulation);
             simulationState.autoSimulation = null;
         }
     }

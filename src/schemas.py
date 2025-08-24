@@ -14,12 +14,12 @@ class ABTestCreate(BaseModel):
     traffic_split_ratio: float = Field(0.5, description="트래픽 분배 비율")
     min_sample_size: int = Field(1000, description="최소 샘플 크기")
     weights: Dict[str, float] = Field(
-        default={"ctr": 0.3, "cvr": 0.4, "revenue": 0.3},
+        default={"cvr": 0.5, "cart_add_rate": 0.2, "cart_conversion_rate": 0.2, "revenue": 0.1},
         description="지표 가중치"
     )
     guardrail_metrics: Dict[str, Any] = Field(
-        default={"bounce_rate_threshold": 0.8, "session_duration_min": 30},
-        description="가드레일 지표 설정"
+        default={},
+        description="가드레일 지표 설정 (현재 미사용)"
     )
 
 class ABTestResponse(BaseModel):
@@ -56,12 +56,11 @@ class VariantResponse(BaseModel):
     name: str
     content: Dict[str, Any]
     content_hash: str
-    impressions: int
     clicks: int
     purchases: int
+    cart_additions: int
+    cart_purchases: int
     revenue: float
-    bounce_rate: float
-    avg_session_duration: float
     is_active: bool
     is_winner: bool
     created_at: datetime
@@ -98,9 +97,10 @@ class TestResultResponse(BaseModel):
     winner_score: Optional[float]
     p_value: Optional[float]
     confidence_level: Optional[float]
-    total_impressions: int
     total_clicks: int
     total_purchases: int
+    total_cart_additions: int
+    total_cart_purchases: int
     total_revenue: float
     created_at: datetime
 
@@ -112,15 +112,15 @@ class TestResultResponse(BaseModel):
 class VariantMetrics(BaseModel):
     variant_id: int
     variant_name: str
-    impressions: int
     clicks: int
     purchases: int
+    cart_additions: int
+    cart_purchases: int
     revenue: float
-    ctr: float  # Click Through Rate
-    cvr: float  # Conversion Rate
-    revenue_per_user: float
-    bounce_rate: float
-    avg_session_duration: float
+    cvr: float  # 구매전환율 (purchases / clicks)
+    cart_add_rate: float  # 장바구니 추가율 (cart_additions / clicks)
+    cart_conversion_rate: float  # 장바구니 전환율 (cart_purchases / cart_additions)
+    revenue_per_click: float  # 클릭당 매출 (revenue / clicks)
     score: float  # 가중치 적용된 최종 점수
 
 class ABTestAnalytics(BaseModel):
@@ -133,9 +133,10 @@ class ABTestAnalytics(BaseModel):
     confidence_level: Optional[float]
     test_duration_days: int
     days_remaining: Optional[int]
-    total_impressions: int
     total_clicks: int
     total_purchases: int
+    total_cart_additions: int
+    total_cart_purchases: int
     total_revenue: float
 
 # --- AI 콘텐츠 생성 관련 스키마 ---
