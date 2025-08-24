@@ -371,8 +371,16 @@ function startSimulation() {
         }
         
         simulationState.isRunning = true;
-        document.querySelector('.btn-start').textContent = '시뮬레이션 중지';
-        document.querySelector('.btn-start').classList.add('btn-stop');
+        
+        // 버튼 상태 업데이트 (안전하게 처리)
+        const startBtn = document.querySelector('.btn-start');
+        if (startBtn) {
+            startBtn.textContent = '시뮬레이션 중지';
+            startBtn.classList.add('btn-stop');
+        }
+        
+        // 버튼 상태 업데이트
+        updateSimulationButtons();
         
         startAutoSimulation();
         startDashboardUpdates();
@@ -857,54 +865,50 @@ function openTestHistory() {
     window.open('/test/dashboard.html#history', '_blank');
 }
 
-// 시뮬레이션 시작 함수
-function startSimulation() {
-    if (simulationState.isRunning) {
-        showNotification('시뮬레이션이 이미 실행 중입니다.', 'warning');
-        return;
+// 알림 표시 함수
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    
+    // 스타일 설정
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        border-radius: 5px;
+        color: white;
+        font-weight: bold;
+        z-index: 10000;
+        max-width: 300px;
+        word-wrap: break-word;
+    `;
+    
+    // 타입별 색상
+    switch(type) {
+        case 'success':
+            notification.style.backgroundColor = '#28a745';
+            break;
+        case 'error':
+            notification.style.backgroundColor = '#dc3545';
+            break;
+        case 'warning':
+            notification.style.backgroundColor = '#ffc107';
+            notification.style.color = '#212529';
+            break;
+        default:
+            notification.style.backgroundColor = '#17a2b8';
     }
     
-    // 테스트 ID를 1로 설정 (기본값)
-    simulationState.testId = 1;
-    simulationState.isRunning = true;
+    document.body.appendChild(notification);
     
-    // 테스트 정보 로드 (기본값으로 설정)
-    simulationState.testInfo = {
-        id: 1,
-        name: "테스트 제품",
-        product_price: 1200000
-    };
-    
-    // 버튼 상태 업데이트
-    updateSimulationButtons();
-    
-    // 자동 시뮬레이션 시작
-    startAutoSimulation();
-    
-    showNotification('시뮬레이션이 시작되었습니다! 자동 상호작용이 실행 중입니다.', 'success');
-    updateRealTimeStatus();
-}
-
-// 시뮬레이션 중지 함수
-function stopSimulation() {
-    if (!simulationState.isRunning) {
-        showNotification('시뮬레이션이 실행 중이 아닙니다.', 'warning');
-        return;
-    }
-    
-    simulationState.isRunning = false;
-    
-    // 자동 시뮬레이션 중지
-    if (simulationState.autoSimulation) {
-        clearInterval(simulationState.autoSimulation);
-        simulationState.autoSimulation = null;
-    }
-    
-    // 버튼 상태 업데이트
-    updateSimulationButtons();
-    
-    showNotification('시뮬레이션이 중지되었습니다.', 'info');
-    updateRealTimeStatus();
+    // 3초 후 자동 제거
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 3000);
 }
 
 // 시뮬레이션 버튼 상태 업데이트
@@ -913,18 +917,170 @@ function updateSimulationButtons() {
     const stopBtn = document.getElementById('stopBtn');
     
     if (simulationState.isRunning) {
-        startBtn.style.display = 'none';
-        stopBtn.style.display = 'inline-block';
+        if (startBtn) startBtn.style.display = 'none';
+        if (stopBtn) stopBtn.style.display = 'inline-block';
     } else {
-        startBtn.style.display = 'inline-block';
-        stopBtn.style.display = 'none';
+        if (startBtn) startBtn.style.display = 'inline-block';
+        if (stopBtn) stopBtn.style.display = 'none';
     }
 }
 
-// 시뮬레이션 초기화 함수
+// 자동 시뮬레이션 시작
+function startAutoSimulation() {
+    if (simulationState.autoSimulation) {
+        clearInterval(simulationState.autoSimulation);
+    }
+    
+    const speedConfig = simulationState.speedSettings[simulationState.currentSpeed];
+    console.log('🚀 자동 시뮬레이션 시작:', speedConfig);
+    
+    simulationState.autoSimulation = setInterval(() => {
+        if (!simulationState.isRunning) {
+            console.log('❌ 시뮬레이션이 중지됨, 자동 시뮬레이션 종료');
+            clearInterval(simulationState.autoSimulation);
+            return;
+        }
+        
+        console.log('👥 방문자 그룹 생성 중...');
+        
+        // 랜덤하게 방문자 수 결정
+        const visitorsCount = Math.floor(Math.random() * (speedConfig.visitors[1] - speedConfig.visitors[0] + 1)) + speedConfig.visitors[0];
+        
+        for (let i = 0; i < visitorsCount; i++) {
+            // 50% 확률로 버전 A 또는 B 선택
+            const version = Math.random() < 0.5 ? 'A' : 'B';
+            
+            // 지연 시간 후 방문자 시뮬레이션 실행
+            setTimeout(() => {
+                simulateVisitor(version);
+            }, Math.random() * speedConfig.interval);
+        }
+    }, speedConfig.interval);
+}
+
+// 단일 방문자 시뮬레이션
+async function simulateVisitor(version) {
+    if (!simulationState.isRunning) return;
+    
+    try {
+        // 1. 페이지 로드 (100% 확률)
+        await simulateInteraction(version, 'page_load');
+        await delay(100, 300);
+        
+        // 2. 클릭 (70% 확률)
+        if (Math.random() < 0.7) {
+            await simulateInteraction(version, 'click');
+            await delay(200, 800);
+            
+            // 3-a. 장바구니 추가 (30% 확률)
+            if (Math.random() < 0.3) {
+                await simulateInteraction(version, 'add_to_cart');
+                await delay(300, 1000);
+                
+                // 4-a. 장바구니에서 구매 (40% 확률)
+                if (Math.random() < 0.4) {
+                    await simulateInteractionWithMetadata(version, 'purchase', { purchase_type: 'from_cart' });
+                }
+            } else {
+                // 3-b. 직접 구매 (15% 확률)
+                if (Math.random() < 0.15) {
+                    await simulateInteractionWithMetadata(version, 'purchase', { purchase_type: 'direct' });
+                }
+            }
+        }
+        
+        // 5. 오류 (2% 확률)
+        if (Math.random() < 0.02) {
+            await simulateInteraction(version, 'error');
+        }
+        
+    } catch (error) {
+        console.error('방문자 시뮬레이션 오류:', error);
+    }
+}
+
+// 시뮬레이션 상호작용 실행
+async function simulateInteraction(version, interactionType) {
+    try {
+        // 로컬 상태 업데이트
+        updateLocalStats(version, interactionType);
+        
+        // 서버에 전송
+        await recordInteractionToServer(version, interactionType);
+        
+        // UI 업데이트 (성능상 일부 생략)
+        if (Math.random() < 0.1) { // 10% 확률로만 UI 업데이트
+            updateStats();
+        }
+        
+    } catch (error) {
+        console.error('상호작용 시뮬레이션 실패:', error);
+    }
+}
+
+// 메타데이터가 있는 시뮬레이션 상호작용
+async function simulateInteractionWithMetadata(version, interactionType, metadata = {}) {
+    try {
+        // 로컬 상태 업데이트
+        updateLocalStats(version, interactionType, metadata);
+        
+        // 서버에 전송
+        await recordInteractionToServerWithMetadata(version, interactionType, metadata);
+        
+        // UI 업데이트 (성능상 일부 생략)
+        if (Math.random() < 0.1) { // 10% 확률로만 UI 업데이트
+            updateStats();
+        }
+        
+    } catch (error) {
+        console.error('상호작용 시뮬레이션 실패:', error);
+    }
+}
+
+// 지연 함수
+function delay(min, max) {
+    const ms = Math.random() * (max - min) + min;
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// 시뮬레이션 속도 변경
+function changeSimulationSpeed() {
+    const speedControl = document.getElementById('speedControl');
+    if (!speedControl) return;
+    
+    const newSpeed = speedControl.value;
+    simulationState.currentSpeed = newSpeed;
+    
+    console.log('속도 변경:', newSpeed);
+    
+    // 실행 중이면 재시작
+    if (simulationState.isRunning) {
+        if (simulationState.autoSimulation) {
+            clearInterval(simulationState.autoSimulation);
+            simulationState.autoSimulation = null;
+        }
+        
+        // 새로운 속도로 재시작
+        startAutoSimulation();
+        
+        const speedConfig = simulationState.speedSettings[newSpeed];
+        const estimatedVPM = Math.round(60000 / speedConfig.interval * 2.5);
+        showNotification(`🚀 새로운 속도로 재시작! 예상 분당 방문자: ${estimatedVPM}명`, 'success');
+    }
+}
+
+// 시뮬레이션 초기화
 function resetSimulation() {
     // 시뮬레이션 중지
-    stopSimulation();
+    if (simulationState.isRunning) {
+        simulationState.isRunning = false;
+        
+        // 자동 시뮬레이션 중지
+        if (simulationState.autoSimulation) {
+            clearInterval(simulationState.autoSimulation);
+            simulationState.autoSimulation = null;
+        }
+    }
     
     // 통계 초기화
     simulationState.stats = {
@@ -972,393 +1128,69 @@ function resetSimulation() {
     showNotification('시뮬레이션이 초기화되었습니다.', 'success');
 }
 
-// 자동 시뮬레이션 시작
-function startAutoSimulation() {
-    if (simulationState.autoSimulation) {
-        clearInterval(simulationState.autoSimulation);
-    }
-    
-    const speedConfig = simulationState.speedSettings[simulationState.currentSpeed];
-    
-    simulationState.autoSimulation = setInterval(() => {
-        if (!simulationState.isRunning) {
-            clearInterval(simulationState.autoSimulation);
-            return;
-        }
-        
-        // 랜덤하게 방문자 수 결정
-        const visitorsCount = Math.floor(Math.random() * (speedConfig.visitors[1] - speedConfig.visitors[0] + 1)) + speedConfig.visitors[0];
-        
-        for (let i = 0; i < visitorsCount; i++) {
-            // 50% 확률로 버전 A 또는 B 선택
-            const version = Math.random() < 0.5 ? 'A' : 'B';
-            
-            // 지연 시간 후 방문자 시뮬레이션 실행
-            setTimeout(() => {
-                simulateVisitor(version);
-            }, Math.random() * speedConfig.interval);
-        }
-    }, speedConfig.interval);
-}
-
-// 단일 방문자 시뮬레이션
-async function simulateVisitor(version) {
-    if (!simulationState.isRunning) return;
-    
-    try {
-        // 1. 페이지 로드 (100% 확률)
-        await simulateInteraction(version, 'page_load');
-        await delay(100, 300);
-        
-        // 2. 클릭 (70% 확률)
-        if (Math.random() < 0.7) {
-            await simulateInteraction(version, 'click');
-            await delay(200, 800);
-            
-            // 3. 장바구니 추가 (30% 확률)
-            if (Math.random() < 0.3) {
-                await simulateInteraction(version, 'add_to_cart');
-                await delay(300, 1000);
-                
-                // 4-a. 장바구니에서 구매 (40% 확률)
-                if (Math.random() < 0.4) {
-                    await simulateInteractionWithMetadata(version, 'purchase', { purchase_type: 'from_cart' });
-                }
-            } else {
-                // 4-b. 직접 구매 (15% 확률)
-                if (Math.random() < 0.15) {
-                    await simulateInteractionWithMetadata(version, 'purchase', { purchase_type: 'direct' });
-                }
-            }
-        }
-        
-        // 5. 오류 발생 (2% 확률)
-        if (Math.random() < 0.02) {
-            await simulateInteraction(version, 'error');
-        }
-        
-    } catch (error) {
-        console.error('방문자 시뮬레이션 오류:', error);
-    }
-}
-
-// 개별 상호작용 시뮬레이션
-async function simulateInteraction(version, interactionType) {
-    try {
-        // 서버 전송
-        await recordInteractionToServer(version, interactionType);
-        
-        // 로컬 통계 업데이트
-        updateLocalStats(version, interactionType);
-        
-        // UI 업데이트
-        updateStats();
-        updateRealTimeStatus();
-        
-    } catch (error) {
-        console.error('상호작용 시뮬레이션 실패:', error);
-    }
-}
-
-// 메타데이터가 있는 상호작용 시뮬레이션
-async function simulateInteractionWithMetadata(version, interactionType, metadata = {}) {
-    try {
-        // 서버 전송
-        await recordInteractionToServerWithMetadata(version, interactionType, metadata);
-        
-        // 로컬 통계 업데이트
-        updateLocalStats(version, interactionType, metadata);
-        
-        // UI 업데이트
-        updateStats();
-        updateRealTimeStatus();
-        
-    } catch (error) {
-        console.error('상호작용 시뮬레이션 실패:', error);
-    }
-}
-
-// 지연 함수
-function delay(min, max) {
-    const delayTime = Math.random() * (max - min) + min;
-    return new Promise(resolve => setTimeout(resolve, delayTime));
-}
-
-// 시뮬레이션 속도 변경
-function changeSimulationSpeed() {
-    const speedControl = document.getElementById('speedControl');
-    if (!speedControl) return;
-    
-    const newSpeed = speedControl.value;
-    simulationState.currentSpeed = newSpeed;
-    
-    // 실행 중인 경우 자동 시뮬레이션 재시작
-    if (simulationState.isRunning) {
-        if (simulationState.autoSimulation) {
-            clearInterval(simulationState.autoSimulation);
-            simulationState.autoSimulation = null;
-        }
-        
-        // 새로운 속도로 재시작
-        startAutoSimulation();
-        
-        const speedConfig = simulationState.speedSettings[newSpeed];
-        const estimatedVisitorsPerMinute = Math.round(60000 / speedConfig.interval * 2.5); // 평균 방문자 수
-        showNotification(`🚀 새로운 속도로 재시작! 예상 분당 방문자: ${estimatedVisitorsPerMinute}명`, 'success');
-    }
-}
-
-// 통계적 유의성 계산 (새로운 지표 시스템)
-function calculateSignificance(stats) {
-    const n1 = stats.versionA.clicks;
-    const n2 = stats.versionB.clicks;
-    const p1 = stats.versionA.purchases / Math.max(n1, 1);
-    const p2 = stats.versionB.purchases / Math.max(n2, 1);
-    
-    if (n1 < 10 || n2 < 10) {
-        return '부족한 데이터';
-    }
-    
-    // 간단한 z-test
-    const pooledP = (stats.versionA.purchases + stats.versionB.purchases) / (n1 + n2);
-    const se = Math.sqrt(pooledP * (1 - pooledP) * (1/n1 + 1/n2));
-    const z = (p2 - p1) / se;
-    
-    if (Math.abs(z) > 1.96) {
-        return '유의함 (95%)';
-    } else if (Math.abs(z) > 1.645) {
-        return '유의함 (90%)';
-    } else {
-        return '유의하지 않음';
-    }
-}
-
-// 승자 표시 업데이트
-function updateWinnerDisplay(conversionA, conversionB) {
-    const versionACard = document.getElementById('versionA');
-    const versionBCard = document.getElementById('versionB');
-    
-    // 기존 스타일 제거
-    versionACard.style.borderColor = '#e2e8f0';
-    versionBCard.style.borderColor = '#e2e8f0';
-    versionACard.style.backgroundColor = 'white';
-    versionBCard.style.backgroundColor = 'white';
-    
-    // 승자 표시
-    if (conversionB > conversionA && conversionA > 0) {
-        versionBCard.style.borderColor = '#38a169';
-        versionBCard.style.backgroundColor = '#f0fff4';
-    } else if (conversionA > conversionB && conversionB > 0) {
-        versionACard.style.borderColor = '#38a169';
-        versionACard.style.backgroundColor = '#f0fff4';
-    }
-}
-
-// 시뮬레이션 초기화
-function resetSimulation() {
-    stopSimulation();
-    
-    simulationState.stats = {
-        versionA: { 
-            clicks: 0, 
-            cart_additions: 0, 
-            purchases: 0, 
-            cart_purchases: 0, 
-            direct_purchases: 0, 
-            errors: 0, 
-            page_loads: 0, 
-            total_page_load_time: 0 
-        },
-        versionB: { 
-            clicks: 0, 
-            cart_additions: 0, 
-            purchases: 0, 
-            cart_purchases: 0, 
-            direct_purchases: 0, 
-            errors: 0, 
-            page_loads: 0, 
-            total_page_load_time: 0 
-        }
-    };
-    
-    // 성능 메트릭 초기화
-    simulationState.performanceMetrics = {
-        lastInteractionTime: Date.now(),
-        totalInteractions: 0,
-        serverErrors: 0,
-        lastTPS: 0,
-        tpsHistory: []
-    };
-    
-    updateStats();
-    updateRealTimeStatus();
-    showNotification('시뮬레이션이 초기화되었습니다.', 'info');
-}
-
-// 테스트 데이터 초기화
-async function resetTestData() {
-    if (!confirm('정말로 모든 테스트 데이터를 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+// 시뮬레이션 중지
+function stopSimulation() {
+    if (!simulationState.isRunning) {
+        showNotification('시뮬레이션이 실행 중이 아닙니다.', 'warning');
         return;
     }
     
-    try {
-        const response = await fetch('http://localhost:8000/api/abtest/cleanup', {
-            method: 'DELETE'
-        });
-        
-        if (response.ok) {
-            const result = await response.json();
-            showNotification(result.message, 'success');
-            resetSimulation();
-            loadTestList();
-        } else {
-            throw new Error('데이터 초기화 실패');
-        }
-    } catch (error) {
-        console.error('데이터 초기화 오류:', error);
-        showNotification('데이터 초기화 중 오류가 발생했습니다.', 'error');
-    }
-}
-
-// 새 테스트 생성
-async function generateNewTest() {
-    try {
-        const productNames = [
-            '노트북 Ultra Pro',
-            '무선 이어폰 Premium',
-            '스마트워치 Elite',
-            '태블릿 Pro Max',
-            '게이밍 마우스 RGB'
-        ];
-        
-        const descriptions = [
-            '최고의 성능을 자랑하는 프리미엄 제품입니다.',
-            '혁신적인 기술로 완성된 최신 제품!',
-            '사용자 경험을 극대화한 프리미엄 모델입니다.',
-            'AI 기술이 적용된 스마트한 제품입니다.',
-            '디자인과 기능을 모두 만족하는 완벽한 제품!'
-        ];
-        
-        const randomProduct = productNames[Math.floor(Math.random() * productNames.length)];
-        const randomDesc = descriptions[Math.floor(Math.random() * descriptions.length)];
-        
-        // 제품 정보 업데이트
-        document.getElementById('titleA').textContent = randomProduct;
-        document.getElementById('titleB').textContent = randomProduct;
-        document.getElementById('descA').textContent = randomDesc;
-        document.getElementById('descB').textContent = randomDesc.replace(/입니다\.$/, '!').replace(/입니다\.$/, '!');
-        
-        showNotification('새로운 테스트 제품이 생성되었습니다.', 'success');
-    } catch (error) {
-        console.error('새 테스트 생성 오류:', error);
-        showNotification('새 테스트 생성 중 오류가 발생했습니다.', 'error');
-    }
-}
-
-// 알림 표시
-function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
+    simulationState.isRunning = false;
     
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.remove();
-    }, 3000);
-}
-
-// 대시보드 열기
-function openDashboard() {
-    window.open('dashboard.html', '_blank');
-}
-
-// AI 분석 열기
-function openAIAnalysis() {
-    if (!simulationState.testId) {
-        showNotification('먼저 테스트를 선택해주세요.', 'error');
-        return;
-    }
-    window.open(`dashboard.html?testId=${simulationState.testId}&view=analysis`, '_blank');
-}
-
-// 테스트 히스토리 열기
-function openTestHistory() {
-    window.open('dashboard.html?view=history', '_blank');
-}
-
-// 키보드 단축키
-document.addEventListener('keydown', function(event) {
-    switch(event.key) {
-        case '1':
-            recordInteraction('A', 'view');
-            break;
-        case '2':
-            recordInteraction('B', 'view');
-            break;
-        case 'q':
-            recordInteraction('A', 'click');
-            recordInteraction('A', 'purchase');
-            break;
-        case 'w':
-            recordInteraction('B', 'click');
-            recordInteraction('B', 'purchase');
-            break;
-        case 'r':
-            resetSimulation();
-            break;
-        case 's':
-            if (!simulationState.isRunning) {
-                startSimulation();
-            }
-            break;
-    }
-});
-
-// 속도 변경 함수
-function changeSimulationSpeed() {
-    const speedSelect = document.getElementById('speedControl');
-    const newSpeed = speedSelect.value;
-    simulationState.currentSpeed = newSpeed;
-    
-    showNotification(`시뮬레이션 속도가 "${speedSelect.options[speedSelect.selectedIndex].text}"로 변경되었습니다.`, 'info');
-    
-    // 시뮬레이션이 실행 중이면 재시작
-    if (simulationState.isRunning) {
-        // 기존 간격 정리
-        if (simulationState.autoSimulation) {
-            clearInterval(simulationState.autoSimulation);
-            simulationState.autoSimulation = null;
-        }
-        
-        // 새로운 속도로 재시작
-        startAutoSimulation();
-        
-        const speedConfig = simulationState.speedSettings[newSpeed];
-        const estimatedVisitorsPerMinute = Math.round(60000 / speedConfig.interval * 2.5); // 평균 방문자 수
-        showNotification(`🚀 새로운 속도로 재시작! 예상 분당 방문자: ${estimatedVisitorsPerMinute}명`, 'success');
-    }
-}
-
-// 페이지 언로드 시 정리
-window.addEventListener('beforeunload', function() {
+    // 자동 시뮬레이션 중지
     if (simulationState.autoSimulation) {
         clearInterval(simulationState.autoSimulation);
+        simulationState.autoSimulation = null;
     }
-    if (simulationState.batchProcessor) {
-        clearInterval(simulationState.batchProcessor);
-    }
+    
+    // 대시보드 업데이트 중지
     if (simulationState.dashboardUpdateInterval) {
         clearInterval(simulationState.dashboardUpdateInterval);
+        simulationState.dashboardUpdateInterval = null;
     }
-});
-
-// 페이지 로드 시 초기화
-window.addEventListener('DOMContentLoaded', function() {
-    // 초기 상태 업데이트
-    updateRealTimeStatus();
-    updateStats();
     
-    // 주기적으로 대시보드 연결 상태 체크 (30초마다)
-    setInterval(checkDashboardConnection, 30000);
-});
+    // 버튼 상태 업데이트
+    updateSimulationButtons();
+    
+    // 실시간 상태 업데이트
+    updateRealTimeStatus();
+    
+    showNotification('시뮬레이션이 중지되었습니다.', 'info');
+}
+
+// 대시보드 실시간 업데이트 시작
+function startDashboardUpdates() {
+    simulationState.dashboardUpdateInterval = setInterval(() => {
+        if (!simulationState.isRunning) return;
+        
+        // 대시보드가 열려있다면 실시간 업데이트
+        updateDashboardIfOpen();
+    }, 2000); // 2초마다 대시보드 업데이트
+}
+
+// 대시보드가 열려있다면 업데이트
+function updateDashboardIfOpen() {
+    try {
+        // 부모 창이 있고 대시보드인 경우
+        if (window.opener && window.opener.location.href.includes('dashboard.html')) {
+            window.opener.postMessage({
+                type: 'SIMULATION_UPDATE',
+                testId: simulationState.testId,
+                stats: simulationState.stats
+            }, '*');
+        }
+        
+        // iframe 내부에서 실행되는 경우
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage({
+                type: 'SIMULATION_UPDATE',
+                testId: simulationState.testId,
+                stats: simulationState.stats
+            }, '*');
+        }
+    } catch (error) {
+        // 다른 도메인이나 보안 정책으로 인한 오류는 무시
+        console.log('대시보드 업데이트 중 오류 (무시됨):', error.message);
+    }
+}
+

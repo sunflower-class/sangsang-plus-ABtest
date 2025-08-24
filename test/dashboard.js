@@ -442,7 +442,12 @@ async function loadAIAnalysis() {
                         </div>
                         <div class="ai-metric">
                             <div class="ai-metric-label">신뢰도</div>
-                            <div class="ai-metric-value">${(variant.ai_confidence * 100).toFixed(1)}%</div>
+                            <div class="ai-metric-value confidence-clickable" 
+                                 onclick="showConfidenceDetails(${JSON.stringify(variant.confidence_details).replace(/"/g, '&quot;')}, '${variant.variant_name}')" 
+                                 style="cursor: pointer; text-decoration: underline;" 
+                                 title="클릭하면 신뢰도 계산 세부사항을 볼 수 있습니다">
+                                ${(variant.ai_confidence * 100).toFixed(1)}%
+                            </div>
                         </div>
                         <div class="ai-metric">
                             <div class="ai-metric-label">CVR (구매전환율)</div>
@@ -784,4 +789,99 @@ function manualRefresh() {
         console.error('수동 새로고침 중 오류:', error);
         showMessage('새로고침 중 오류가 발생했습니다.', 'error');
     });
+}
+
+// 신뢰도 계산 세부사항 표시
+function showConfidenceDetails(details, variantName) {
+    let modalContent = `
+        <div style="background: white; padding: 20px; border-radius: 8px; max-width: 600px; margin: 50px auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h3 style="margin-top: 0; color: #2d3748;">${variantName} - 신뢰도 계산 세부사항</h3>
+    `;
+    
+    if (details.calculation_method === 'statistical') {
+        modalContent += `
+            <div style="background: #f7fafc; padding: 15px; border-radius: 6px; margin: 15px 0;">
+                <h4 style="color: #2b6cb0; margin-top: 0;">📊 통계적 신뢰도 계산</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 10px 0;">
+                    <div><strong>샘플 크기:</strong> ${details.sample_size}번의 클릭</div>
+                    <div><strong>전환율:</strong> ${details.conversion_rate}%</div>
+                    <div><strong>표준 오차:</strong> ${details.std_error}</div>
+                    <div><strong>오차 한계:</strong> ±${details.margin_of_error}%</div>
+                </div>
+            </div>
+            
+            <div style="background: #edf2f7; padding: 15px; border-radius: 6px; margin: 15px 0;">
+                <h4 style="color: #2d3748; margin-top: 0;">🧮 계산 과정</h4>
+                <div style="margin: 10px 0;">
+                    <div><strong>1단계 - 기본 신뢰도:</strong> min(${details.sample_size}/300, 1.0) = ${details.base_confidence}%</div>
+                    <div><strong>2단계 - 변동성 보정:</strong> (1 - ${details.margin_of_error/100}) = ${details.variability_factor}%</div>
+                    <div><strong>3단계 - 최종 신뢰도:</strong> ${details.base_confidence}% × ${details.variability_factor}% = <strong>${details.final_confidence}%</strong></div>
+                </div>
+                <div style="background: #bee3f8; padding: 10px; border-radius: 4px; margin-top: 15px;">
+                    <strong>📐 공식:</strong> ${details.formula}
+                </div>
+            </div>
+            
+            <div style="background: #f0fff4; padding: 15px; border-radius: 6px; margin: 15px 0;">
+                <h4 style="color: #22543d; margin-top: 0;">💡 해석</h4>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                    <li>샘플이 클수록 신뢰도 증가 (최대 300클릭에서 100%)</li>
+                    <li>전환율의 변동성이 클수록 신뢰도 감소</li>
+                    <li>95% 신뢰구간을 기준으로 계산</li>
+                    <li>최소 10% 신뢰도 보장</li>
+                </ul>
+            </div>
+        `;
+    } else {
+        modalContent += `
+            <div style="background: #fff5f5; padding: 15px; border-radius: 6px; margin: 15px 0;">
+                <h4 style="color: #c53030; margin-top: 0;">⚠️ 제한된 신뢰도 (샘플 부족)</h4>
+                <div style="margin: 10px 0;">
+                    <div><strong>샘플 크기:</strong> ${details.sample_size}번의 클릭</div>
+                    <div><strong>선형 신뢰도:</strong> ${details.linear_confidence}%</div>
+                </div>
+                <div style="background: #fed7d7; padding: 10px; border-radius: 4px; margin-top: 15px;">
+                    <strong>📐 공식:</strong> ${details.formula}
+                </div>
+                <div style="background: #fef5e7; padding: 10px; border-radius: 4px; margin-top: 15px;">
+                    <strong>💡 참고:</strong> 신뢰할 만한 통계 분석을 위해서는 최소 30회 이상의 클릭이 필요합니다.
+                </div>
+            </div>
+        `;
+    }
+    
+    modalContent += `
+            <div style="text-align: center; margin-top: 20px;">
+                <button onclick="closeConfidenceModal()" style="background: #3182ce; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                    닫기
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // 모달 배경 생성
+    const modalOverlay = document.createElement('div');
+    modalOverlay.id = 'confidenceModal';
+    modalOverlay.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+        background: rgba(0,0,0,0.5); z-index: 10000; overflow-y: auto;
+    `;
+    modalOverlay.innerHTML = modalContent;
+    
+    // 배경 클릭시 닫기
+    modalOverlay.onclick = (e) => {
+        if (e.target === modalOverlay) {
+            closeConfidenceModal();
+        }
+    };
+    
+    document.body.appendChild(modalOverlay);
+}
+
+// 신뢰도 모달 닫기
+function closeConfidenceModal() {
+    const modal = document.getElementById('confidenceModal');
+    if (modal) {
+        modal.remove();
+    }
 }

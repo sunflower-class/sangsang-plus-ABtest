@@ -200,11 +200,46 @@ async def get_ai_analysis(
         
         for variant in variants:
             score = service.calculate_variant_ai_score(variant, weights)
+            
+            # 신뢰도 계산 세부사항
+            sample_size = variant.clicks
+            conversion_rate = variant.purchases / max(variant.clicks, 1)
+            confidence_details = {}
+            
+            if sample_size >= 30:
+                std_error = (conversion_rate * (1 - conversion_rate) / sample_size) ** 0.5
+                margin_of_error = 1.96 * std_error
+                base_confidence = min(sample_size / 300, 1.0)
+                variability_factor = 1 - min(margin_of_error, 1.0)
+                final_confidence = base_confidence * variability_factor
+                final_confidence = max(final_confidence, 0.1)
+                
+                confidence_details = {
+                    "calculation_method": "statistical",
+                    "sample_size": sample_size,
+                    "conversion_rate": round(conversion_rate * 100, 2),
+                    "std_error": round(std_error, 4),
+                    "margin_of_error": round(margin_of_error * 100, 2),
+                    "base_confidence": round(base_confidence * 100, 1),
+                    "variability_factor": round(variability_factor * 100, 1),
+                    "final_confidence": round(final_confidence * 100, 1),
+                    "formula": "min(sample_size/300, 1.0) × (1 - margin_of_error)"
+                }
+            else:
+                linear_confidence = sample_size / 300
+                confidence_details = {
+                    "calculation_method": "linear",
+                    "sample_size": sample_size,
+                    "linear_confidence": round(linear_confidence * 100, 1),
+                    "formula": "sample_size / 300 (최소 샘플 부족)"
+                }
+            
             analysis = {
                 "variant_id": variant.id,
                 "variant_name": variant.name,
                 "ai_score": score,
                 "ai_confidence": variant.ai_confidence,
+                "confidence_details": confidence_details,
                 "cvr": variant.purchases / max(variant.clicks, 1),
                 "cart_add_rate": variant.cart_additions / max(variant.clicks, 1),
                 "cart_conversion_rate": min(variant.cart_purchases / max(variant.cart_additions, 1), 1.0) if variant.cart_additions > 0 and variant.cart_purchases is not None else 0.0,

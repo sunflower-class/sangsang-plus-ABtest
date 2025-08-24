@@ -176,8 +176,23 @@ class ABTestService:
             # 최종 점수 = 기본 점수 × 가드레일 배수
             score = base_score * guardrail_score
             
-            # 신뢰도 계산 (클릭 수 기반)
-            confidence = min(variant.clicks / 1000, 1.0)  # 최대 1000 클릭 기준
+            # 신뢰도 계산 (통계적 신뢰도 기반)
+            # 샘플 크기와 전환율 변동성을 고려한 신뢰도
+            sample_size = variant.clicks
+            conversion_rate = variant.purchases / max(variant.clicks, 1)
+            
+            # 통계적 신뢰도 계산 (표준오차 기반)
+            if sample_size >= 30:  # 중심극한정리 기준
+                # 신뢰구간 기반 신뢰도 계산
+                std_error = (conversion_rate * (1 - conversion_rate) / sample_size) ** 0.5
+                margin_of_error = 1.96 * std_error  # 95% 신뢰구간
+                
+                # 신뢰도는 표본 크기와 변동성의 역함수
+                confidence = min(sample_size / 300, 1.0) * (1 - min(margin_of_error, 1.0))
+                confidence = max(confidence, 0.1)  # 최소 10%
+            else:
+                # 샘플이 적으면 낮은 신뢰도
+                confidence = sample_size / 300  # 300 클릭 기준으로 선형 증가
             
             # 점수 업데이트
             variant.ai_score = score
