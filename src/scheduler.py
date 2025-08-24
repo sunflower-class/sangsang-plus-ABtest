@@ -87,11 +87,11 @@ class ABTestScheduler:
             
             for test in active_tests:
                 try:
-                    # 최소 샘플 크기 확인
-                    total_impressions = sum(v.impressions for v in test.variants)
+                    # 최소 샘플 크기 확인 (clicks 기반)
+                    total_clicks = sum(v.clicks for v in test.variants)
                     
-                    if total_impressions >= test.min_sample_size:
-                        logger.info(f"테스트 {test.id}의 최소 샘플 크기 달성: {total_impressions}")
+                    if total_clicks >= test.min_sample_size:
+                        logger.info(f"테스트 {test.id}의 최소 샘플 크기 달성: {total_clicks}")
                         
                         # AI 승자 결정 시도
                         winner_id = service.determine_ai_winner(test.id)

@@ -650,9 +650,10 @@ class ABTestService:
                 confidence_level=None,
                 test_duration_days=ab_test.test_duration_days,
                 days_remaining=days_remaining,
-                total_impressions=sum(v.impressions for v in variants),
                 total_clicks=sum(v.clicks for v in variants),
                 total_purchases=sum(v.purchases for v in variants),
+                total_cart_additions=sum(v.cart_additions for v in variants),
+                total_cart_purchases=sum(v.cart_purchases for v in variants),
                 total_revenue=sum(v.revenue for v in variants)
             )
 

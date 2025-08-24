@@ -578,14 +578,15 @@ async def create_test(
     try:
         service = ABTestService(db)
         
-        # 테스트 데이터 준비
+        # 테스트 데이터 준비 (사용자 입력값 우선 사용)
         test_dict = {
-            "name": test_data.get("product_name", "테스트 제품"),
+            "name": test_data.get("name", "테스트 제품"),
             "description": "AI 생성 A/B 테스트",
-            "product_id": test_data.get("product_name", "test_product"),
+            "product_id": test_data.get("product_id", "test_product"),
+            "product_price": test_data.get("product_price", 1000.0),
             "test_duration_days": test_data.get("test_duration_days", 7),
             "traffic_split_ratio": 0.5,
-            "min_sample_size": 100,
+            "min_sample_size": test_data.get("min_sample_size", 100),
             "weights": {
                 "cvr": 0.5,                    # 구매전환율 (구매 수 / 클릭 수) - 50%
                 "cart_add_rate": 0.2,          # 장바구니 추가율 (장바구니 추가 수 / 클릭 수) - 20%
