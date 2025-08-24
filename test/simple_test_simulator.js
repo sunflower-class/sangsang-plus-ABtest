@@ -60,6 +60,9 @@ function updateRealTimeStatus() {
         }
     }
     
+    // 대시보드 연결 상태 체크
+    checkDashboardConnection();
+    
     // 총 상호작용 수 업데이트
     const totalElement = document.getElementById('totalInteractions');
     if (totalElement) {
@@ -114,6 +117,30 @@ function updateServerResponseStatus() {
             serverElement.textContent = '오류';
             serverElement.style.color = '#e53e3e';
         }
+    }
+}
+
+// 대시보드 연결 상태 체크
+async function checkDashboardConnection() {
+    const dashboardElement = document.getElementById('dashboardConnection');
+    if (!dashboardElement) return;
+    
+    try {
+        const response = await fetch('http://localhost:8000/api/abtest/', {
+            method: 'GET',
+            timeout: 3000
+        });
+        
+        if (response.ok) {
+            dashboardElement.textContent = '연결됨';
+            dashboardElement.style.color = '#38a169';
+        } else {
+            dashboardElement.textContent = '연결 실패';
+            dashboardElement.style.color = '#e53e3e';
+        }
+    } catch (error) {
+        dashboardElement.textContent = '연결 안됨';
+        dashboardElement.style.color = '#e53e3e';
     }
 }
 
@@ -524,28 +551,7 @@ function startAutoSimulation() {
         }
     }
     
-    async function recordInteractionToServer(version, interactionType) {
-        if (!simulationState.testId) return;
-        
-        try {
-            const response = await fetch('http://localhost:8000/api/abtest/interaction', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    test_id: simulationState.testId,
-                    variant: version === 'A' ? 'baseline' : 'challenger',
-                    interaction_type: interactionType,
-                    timestamp: new Date().toISOString()
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-        } catch (error) {
-            throw error;
-        }
-    }
+
 }
 
 // 대시보드 실시간 업데이트 시작
@@ -604,18 +610,18 @@ async function recordInteraction(version, interactionType) {
     if (interactionType === 'purchase') {
         if (stats.clicks === 0) {
             showNotification('클릭 없이는 구매할 수 없습니다. 먼저 클릭 버튼을 클릭하세요.', 'warning');
-            return;
-        }
-        
+        return;
+    }
+    
         // 장바구니에 상품이 있는 경우 구매 유형 선택
         if (stats.cart_additions > 0) {
             const userChoice = confirm('장바구니에서 구매하시겠습니까?\n\n확인: 장바구니 구매\n취소: 직접 구매');
             if (userChoice) {
                 await recordInteractionWithMetadata(version, interactionType, { purchase_type: 'from_cart' });
-                return;
+        return;
             }
-        }
-        
+    }
+    
         // 직접 구매
         await recordInteractionWithMetadata(version, interactionType, { purchase_type: 'direct' });
         return;
@@ -734,6 +740,30 @@ async function recordInteractionToServerWithMetadata(version, interactionType, m
     }
 }
 
+// 기본 서버 전송 함수
+async function recordInteractionToServer(version, interactionType) {
+    if (!simulationState.testId) return;
+    
+    try {
+        const response = await fetch('http://localhost:8000/api/abtest/interaction', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                test_id: simulationState.testId,
+                variant: version === 'A' ? 'baseline' : 'challenger',
+                interaction_type: interactionType,
+                timestamp: new Date().toISOString()
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+    } catch (error) {
+        throw error;
+    }
+}
+
 
 // 통계 업데이트
 function updateStats() {
@@ -848,7 +878,10 @@ function startSimulation() {
     // 버튼 상태 업데이트
     updateSimulationButtons();
     
-    showNotification('시뮬레이션이 시작되었습니다!', 'success');
+    // 자동 시뮬레이션 시작
+    startAutoSimulation();
+    
+    showNotification('시뮬레이션이 시작되었습니다! 자동 상호작용이 실행 중입니다.', 'success');
     updateRealTimeStatus();
 }
 
@@ -937,6 +970,142 @@ function resetSimulation() {
     updateSimulationButtons();
     
     showNotification('시뮬레이션이 초기화되었습니다.', 'success');
+}
+
+// 자동 시뮬레이션 시작
+function startAutoSimulation() {
+    if (simulationState.autoSimulation) {
+        clearInterval(simulationState.autoSimulation);
+    }
+    
+    const speedConfig = simulationState.speedSettings[simulationState.currentSpeed];
+    
+    simulationState.autoSimulation = setInterval(() => {
+        if (!simulationState.isRunning) {
+            clearInterval(simulationState.autoSimulation);
+            return;
+        }
+        
+        // 랜덤하게 방문자 수 결정
+        const visitorsCount = Math.floor(Math.random() * (speedConfig.visitors[1] - speedConfig.visitors[0] + 1)) + speedConfig.visitors[0];
+        
+        for (let i = 0; i < visitorsCount; i++) {
+            // 50% 확률로 버전 A 또는 B 선택
+            const version = Math.random() < 0.5 ? 'A' : 'B';
+            
+            // 지연 시간 후 방문자 시뮬레이션 실행
+            setTimeout(() => {
+                simulateVisitor(version);
+            }, Math.random() * speedConfig.interval);
+        }
+    }, speedConfig.interval);
+}
+
+// 단일 방문자 시뮬레이션
+async function simulateVisitor(version) {
+    if (!simulationState.isRunning) return;
+    
+    try {
+        // 1. 페이지 로드 (100% 확률)
+        await simulateInteraction(version, 'page_load');
+        await delay(100, 300);
+        
+        // 2. 클릭 (70% 확률)
+        if (Math.random() < 0.7) {
+            await simulateInteraction(version, 'click');
+            await delay(200, 800);
+            
+            // 3. 장바구니 추가 (30% 확률)
+            if (Math.random() < 0.3) {
+                await simulateInteraction(version, 'add_to_cart');
+                await delay(300, 1000);
+                
+                // 4-a. 장바구니에서 구매 (40% 확률)
+                if (Math.random() < 0.4) {
+                    await simulateInteractionWithMetadata(version, 'purchase', { purchase_type: 'from_cart' });
+                }
+            } else {
+                // 4-b. 직접 구매 (15% 확률)
+                if (Math.random() < 0.15) {
+                    await simulateInteractionWithMetadata(version, 'purchase', { purchase_type: 'direct' });
+                }
+            }
+        }
+        
+        // 5. 오류 발생 (2% 확률)
+        if (Math.random() < 0.02) {
+            await simulateInteraction(version, 'error');
+        }
+        
+    } catch (error) {
+        console.error('방문자 시뮬레이션 오류:', error);
+    }
+}
+
+// 개별 상호작용 시뮬레이션
+async function simulateInteraction(version, interactionType) {
+    try {
+        // 서버 전송
+        await recordInteractionToServer(version, interactionType);
+        
+        // 로컬 통계 업데이트
+        updateLocalStats(version, interactionType);
+        
+        // UI 업데이트
+        updateStats();
+        updateRealTimeStatus();
+        
+    } catch (error) {
+        console.error('상호작용 시뮬레이션 실패:', error);
+    }
+}
+
+// 메타데이터가 있는 상호작용 시뮬레이션
+async function simulateInteractionWithMetadata(version, interactionType, metadata = {}) {
+    try {
+        // 서버 전송
+        await recordInteractionToServerWithMetadata(version, interactionType, metadata);
+        
+        // 로컬 통계 업데이트
+        updateLocalStats(version, interactionType, metadata);
+        
+        // UI 업데이트
+        updateStats();
+        updateRealTimeStatus();
+        
+    } catch (error) {
+        console.error('상호작용 시뮬레이션 실패:', error);
+    }
+}
+
+// 지연 함수
+function delay(min, max) {
+    const delayTime = Math.random() * (max - min) + min;
+    return new Promise(resolve => setTimeout(resolve, delayTime));
+}
+
+// 시뮬레이션 속도 변경
+function changeSimulationSpeed() {
+    const speedControl = document.getElementById('speedControl');
+    if (!speedControl) return;
+    
+    const newSpeed = speedControl.value;
+    simulationState.currentSpeed = newSpeed;
+    
+    // 실행 중인 경우 자동 시뮬레이션 재시작
+    if (simulationState.isRunning) {
+        if (simulationState.autoSimulation) {
+            clearInterval(simulationState.autoSimulation);
+            simulationState.autoSimulation = null;
+        }
+        
+        // 새로운 속도로 재시작
+        startAutoSimulation();
+        
+        const speedConfig = simulationState.speedSettings[newSpeed];
+        const estimatedVisitorsPerMinute = Math.round(60000 / speedConfig.interval * 2.5); // 평균 방문자 수
+        showNotification(`🚀 새로운 속도로 재시작! 예상 분당 방문자: ${estimatedVisitorsPerMinute}명`, 'success');
+    }
 }
 
 // 통계적 유의성 계산 (새로운 지표 시스템)
@@ -1182,4 +1351,14 @@ window.addEventListener('beforeunload', function() {
     if (simulationState.dashboardUpdateInterval) {
         clearInterval(simulationState.dashboardUpdateInterval);
     }
+});
+
+// 페이지 로드 시 초기화
+window.addEventListener('DOMContentLoaded', function() {
+    // 초기 상태 업데이트
+    updateRealTimeStatus();
+    updateStats();
+    
+    // 주기적으로 대시보드 연결 상태 체크 (30초마다)
+    setInterval(checkDashboardConnection, 30000);
 });

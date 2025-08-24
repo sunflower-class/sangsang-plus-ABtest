@@ -434,6 +434,9 @@ def abtest_interaction_post(interaction: dict):
                 # 구매 타입별 구분 (장바구니 구매 vs 직접 구매)
                 purchase_type = interaction.get('metadata', {}).get('purchase_type', 'direct')
                 if purchase_type == 'from_cart':
+                    # cart_purchases가 None인 경우를 대비한 안전 처리
+                    if variant.cart_purchases is None:
+                        variant.cart_purchases = 0
                     variant.cart_purchases += 1
             elif interaction_type == 'bounce':
                 variant.bounces += 1
