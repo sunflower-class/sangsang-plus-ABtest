@@ -183,6 +183,7 @@ async function handleCreateImageTest(event) {
     const testData = {
         name: formData.get('testName'),
         product_id: formData.get('productId'),
+        product_price: parseFloat(formData.get('productPrice')),
         baseline_image_url: formData.get('baselineImageUrl'),
         challenger_image_url: formData.get('challengerImageUrl'),
         test_duration_days: parseInt(formData.get('testDuration')),
@@ -416,14 +417,16 @@ async function loadAIAnalysis() {
         html += '<div class="ai-analysis-item">';
         html += '<h4>AI 가중치</h4>';
         html += '<div class="ai-metrics">';
-        Object.entries(data.ai_weights).forEach(([key, value]) => {
+        if (data.ai_weights) {
+            Object.entries(data.ai_weights).forEach(([key, value]) => {
             html += `
                 <div class="ai-metric">
                     <div class="ai-metric-label">${key.toUpperCase()}</div>
                     <div class="ai-metric-value">${(value * 100).toFixed(1)}%</div>
                 </div>
             `;
-        });
+            });
+        }
         html += '</div></div>';
         
         // 버전별 분석 결과
@@ -442,16 +445,25 @@ async function loadAIAnalysis() {
                             <div class="ai-metric-value">${(variant.ai_confidence * 100).toFixed(1)}%</div>
                         </div>
                         <div class="ai-metric">
-                            <div class="ai-metric-label">CTR</div>
-                            <div class="ai-metric-value">${(variant.ctr * 100).toFixed(2)}%</div>
-                        </div>
-                        <div class="ai-metric">
-                            <div class="ai-metric-label">CVR</div>
+                            <div class="ai-metric-label">CVR (구매전환율)</div>
                             <div class="ai-metric-value">${(variant.cvr * 100).toFixed(2)}%</div>
                         </div>
                         <div class="ai-metric">
-                            <div class="ai-metric-label">노출수</div>
-                            <div class="ai-metric-value">${variant.impressions}</div>
+                            <div class="ai-metric-label">장바구니 추가율</div>
+                            <div class="ai-metric-value">${(variant.cart_add_rate * 100).toFixed(2)}%</div>
+                        </div>
+                        <div class="ai-metric">
+                            <div class="ai-metric-label">장바구니 전환율</div>
+                            <div class="ai-metric-value">${(variant.cart_conversion_rate * 100).toFixed(2)}%</div>
+                        </div>
+                        <div class="ai-metric">
+                            <div class="ai-metric-label">클릭당 매출</div>
+                            <div class="ai-metric-value">₩${variant.revenue_per_click.toFixed(0)}</div>
+                        </div>
+
+                        <div class="ai-metric">
+                            <div class="ai-metric-label">클릭수</div>
+                            <div class="ai-metric-value">${variant.clicks}</div>
                         </div>
                     </div>
                 </div>
@@ -509,10 +521,26 @@ async function loadAnalyticsOverview() {
         const response = await fetch(`${API_BASE_URL}/analytics/overview`);
         const data = await response.json();
         
+        // 기본 정보
         document.getElementById('totalTests').textContent = data.total_tests || 0;
         document.getElementById('activeTests').textContent = data.active_tests || 0;
-        document.getElementById('totalInteractions').textContent = data.total_interactions || 0;
-        document.getElementById('conversionRate').textContent = `${((data.conversion_rate || 0) * 100).toFixed(1)}%`;
+        
+        // 새로운 지표들
+        document.getElementById('totalClicks').textContent = data.total_clicks || 0;
+        document.getElementById('totalCartAdditions').textContent = data.total_cart_additions || 0;
+        document.getElementById('totalPurchases').textContent = data.total_purchases || 0;
+        
+        // 평균 비율 계산
+        const avgCvr = data.total_clicks > 0 ? ((data.total_purchases / data.total_clicks) * 100) : 0;
+        const avgCartAddRate = data.total_clicks > 0 ? ((data.total_cart_additions / data.total_clicks) * 100) : 0;
+        
+        document.getElementById('avgCvr').textContent = `${avgCvr.toFixed(1)}%`;
+        document.getElementById('avgCartAddRate').textContent = `${avgCartAddRate.toFixed(1)}%`;
+        
+        // 총 매출 포맷팅
+        const totalRevenue = data.total_revenue || 0;
+        document.getElementById('totalRevenue').textContent = `₩${totalRevenue.toLocaleString()}`;
+        
     } catch (error) {
         console.error('분석 개요 로드 실패:', error);
     }
@@ -539,10 +567,14 @@ function updatePerformanceChart(performanceData) {
     }
     
     const labels = performanceData.map(item => item.product_name);
-    const baselineConversionRates = performanceData.map(item => item.baseline_conversion_rate);
-    const challengerConversionRates = performanceData.map(item => item.challenger_conversion_rate);
-    const baselineClickRates = performanceData.map(item => item.baseline_click_rate);
-    const challengerClickRates = performanceData.map(item => item.challenger_click_rate);
+    
+    // 새로운 지표 데이터 추출
+    const baselineCvr = performanceData.map(item => item.baseline_cvr || 0);
+    const challengerCvr = performanceData.map(item => item.challenger_cvr || 0);
+    const baselineCartAddRate = performanceData.map(item => item.baseline_cart_add_rate || 0);
+    const challengerCartAddRate = performanceData.map(item => item.challenger_cart_add_rate || 0);
+    const baselineCartCvr = performanceData.map(item => item.baseline_cart_cvr || 0);
+    const challengerCartCvr = performanceData.map(item => item.challenger_cart_cvr || 0);
     
     performanceChart = new Chart(ctx, {
         type: 'bar',
@@ -550,31 +582,45 @@ function updatePerformanceChart(performanceData) {
             labels: labels,
             datasets: [
                 {
-                    label: 'A안 전환율',
-                    data: baselineConversionRates,
+                    label: 'A안 CVR (구매전환율)',
+                    data: baselineCvr,
                     backgroundColor: 'rgba(54, 162, 235, 0.8)',
                     borderColor: 'rgba(54, 162, 235, 1)',
                     borderWidth: 1
                 },
                 {
-                    label: 'B안 전환율',
-                    data: challengerConversionRates,
+                    label: 'B안 CVR (구매전환율)',
+                    data: challengerCvr,
                     backgroundColor: 'rgba(255, 99, 132, 0.8)',
                     borderColor: 'rgba(255, 99, 132, 1)',
                     borderWidth: 1
                 },
                 {
-                    label: 'A안 클릭률',
-                    data: baselineClickRates,
+                    label: 'A안 장바구니 추가율',
+                    data: baselineCartAddRate,
                     backgroundColor: 'rgba(75, 192, 192, 0.8)',
                     borderColor: 'rgba(75, 192, 192, 1)',
                     borderWidth: 1
                 },
                 {
-                    label: 'B안 클릭률',
-                    data: challengerClickRates,
+                    label: 'B안 장바구니 추가율',
+                    data: challengerCartAddRate,
                     backgroundColor: 'rgba(255, 159, 64, 0.8)',
                     borderColor: 'rgba(255, 159, 64, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'A안 장바구니 전환율',
+                    data: baselineCartCvr,
+                    backgroundColor: 'rgba(153, 102, 255, 0.8)',
+                    borderColor: 'rgba(153, 102, 255, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'B안 장바구니 전환율',
+                    data: challengerCartCvr,
+                    backgroundColor: 'rgba(255, 205, 86, 0.8)',
+                    borderColor: 'rgba(255, 205, 86, 1)',
                     borderWidth: 1
                 }
             ]
@@ -587,7 +633,7 @@ function updatePerformanceChart(performanceData) {
                     beginAtZero: true,
                     ticks: {
                         callback: function(value) {
-                            return (value * 100).toFixed(1) + '%';
+                            return value.toFixed(1) + '%';
                         }
                     }
                 }
@@ -599,7 +645,7 @@ function updatePerformanceChart(performanceData) {
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            return context.dataset.label + ': ' + (context.parsed.y * 100).toFixed(1) + '%';
+                            return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
                         }
                     }
                 }

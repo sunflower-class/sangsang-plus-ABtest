@@ -385,7 +385,7 @@ def abtest_interaction_post(interaction: dict):
     try:
         from sqlalchemy.orm import Session
         from .database import SessionLocal
-        from .models import PerformanceLog, Variant
+        from .models import PerformanceLog, Variant, ABTest
         from datetime import datetime
         import json
         
@@ -419,15 +419,31 @@ def abtest_interaction_post(interaction: dict):
             
             db.add(log)
             
-            # Variant 테이블의 통계 업데이트
-            if interaction_type == 'view':
-                variant.impressions += 1
-            elif interaction_type == 'click':
+            # Variant 테이블의 통계 업데이트 (새로운 지표 시스템)
+            if interaction_type == 'click':
                 variant.clicks += 1
+            elif interaction_type == 'add_to_cart':
+                variant.cart_additions += 1
             elif interaction_type == 'purchase':
                 variant.purchases += 1
-                # 구매 시 수익 추가 (테스트용으로 1000원 고정)
-                variant.revenue += 1000
+                # 상품 가격 가져오기
+                ab_test = db.query(ABTest).filter(ABTest.id == test_id).first()
+                product_price = ab_test.product_price if (ab_test and ab_test.product_price is not None) else 1200000
+                variant.revenue += product_price
+                
+                # 구매 타입별 구분 (장바구니 구매 vs 직접 구매)
+                purchase_type = interaction.get('metadata', {}).get('purchase_type', 'direct')
+                if purchase_type == 'from_cart':
+                    variant.cart_purchases += 1
+            elif interaction_type == 'bounce':
+                variant.bounces += 1
+            elif interaction_type == 'page_load':
+                variant.total_page_loads += 1
+                # 페이지 로드 시간 시뮬레이션 (실제로는 클라이언트에서 측정)
+                load_time = interaction.get('metadata', {}).get('load_time', 1000)
+                variant.total_page_load_time += load_time
+            elif interaction_type == 'error':
+                variant.errors += 1
             
             db.commit()
             

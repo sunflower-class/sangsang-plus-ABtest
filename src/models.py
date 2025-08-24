@@ -19,12 +19,12 @@ class VariantType(str, Enum):
     CHALLENGER = "challenger"
 
 class InteractionType(str, Enum):
-    IMPRESSION = "impression"
-    CLICK = "click"
-    PURCHASE = "purchase"
-    ADD_TO_CART = "add_to_cart"
-    VIEW_DETAIL = "view_detail"
-    BOUNCE = "bounce"
+    CLICK = "click"                    # 클릭
+    PURCHASE = "purchase"              # 구매
+    ADD_TO_CART = "add_to_cart"       # 장바구니 추가
+    BOUNCE = "bounce"                  # 이탈
+    PAGE_LOAD = "page_load"           # 페이지 로드 (성능 측정용)
+    ERROR = "error"                   # 오류 발생
 
 class ABTest(Base):
     """A/B 테스트 메타데이터 테이블"""
@@ -34,6 +34,7 @@ class ABTest(Base):
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
     product_id = Column(String(100), nullable=False, index=True)
+    product_price = Column(Float, default=1000.0)  # 상품 가격 (기본값 1000원)
     status = Column(String(50), default=TestStatus.ACTIVE, index=True)
     
     # 이미지 URL 필드 추가
@@ -55,16 +56,17 @@ class ABTest(Base):
     min_sample_size = Column(Integer, default=1000)
     
     # 가중치 설정 (JSON 형태로 저장)
-    weights = Column(JSON, default={
-        "ctr": 0.3,
-        "cvr": 0.4,
-        "revenue": 0.3
+    weights = Column(JSON, default=lambda: {
+        "cvr": 0.5,                    # 구매전환율 (구매 수 / 클릭 수) - 50%
+        "cart_add_rate": 0.2,          # 장바구니 추가율 (장바구니 추가 수 / 클릭 수) - 20%
+        "cart_conversion_rate": 0.2,   # 장바구니 전환율 (구매 수 / 장바구니 추가 수) - 20%
+        "revenue": 0.1                 # 매출 (구매 건수 * 구매 금액) - 10%
     })
     
-    # 가드레일 설정
-    guardrail_metrics = Column(JSON, default={
-        "bounce_rate_threshold": 0.8,
-        "session_duration_min": 30
+    # 가드레일 설정 (이탈률 제외)
+    guardrail_metrics = Column(JSON, default=lambda: {
+        "page_load_time_max": 3.0,         # 최대 페이지 로드 시간 (3초)
+        "error_rate_threshold": 0.05       # 오류율 임계값 (5%)
     })
     
     # 시간 정보
@@ -90,13 +92,18 @@ class Variant(Base):
     content = Column(JSON, nullable=False)  # AI가 생성한 상세 페이지 콘텐츠
     content_hash = Column(String(64), nullable=False, index=True)  # 콘텐츠 변경 감지용
     
-    # 성과 지표 (실시간 업데이트)
-    impressions = Column(Integer, default=0)
-    clicks = Column(Integer, default=0)
-    purchases = Column(Integer, default=0)
-    revenue = Column(Float, default=0.0)
-    bounce_rate = Column(Float, default=0.0)
-    avg_session_duration = Column(Float, default=0.0)
+    # 핵심 지표 (실시간 업데이트)
+    clicks = Column(Integer, default=0)                    # 클릭 수
+    purchases = Column(Integer, default=0)                 # 구매 수
+    cart_additions = Column(Integer, default=0)            # 장바구니 추가 수
+    cart_purchases = Column(Integer, default=0)            # 장바구니에서 구매한 수
+    revenue = Column(Float, default=0.0)                   # 매출
+    
+    # 가드레일 지표
+    bounces = Column(Integer, default=0)                   # 이탈 수
+    total_page_loads = Column(Integer, default=0)          # 총 페이지 로드 수
+    total_page_load_time = Column(Float, default=0.0)      # 총 페이지 로드 시간
+    errors = Column(Integer, default=0)                    # 오류 발생 수
     
     # AI 점수 계산
     ai_score = Column(Float, default=0.0)  # AI가 계산한 종합 점수
@@ -153,9 +160,10 @@ class TestResult(Base):
     confidence_level = Column(Float, nullable=True)
     
     # 테스트 요약
-    total_impressions = Column(Integer, default=0)
     total_clicks = Column(Integer, default=0)
     total_purchases = Column(Integer, default=0)
+    total_cart_additions = Column(Integer, default=0)
+    total_cart_purchases = Column(Integer, default=0)
     total_revenue = Column(Float, default=0.0)
     
     # 생성 시간

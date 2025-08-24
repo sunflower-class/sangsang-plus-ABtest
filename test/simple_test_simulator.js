@@ -2,9 +2,28 @@
 let simulationState = {
     isRunning: false,
     testId: null,
+    testInfo: null,
     stats: {
-        versionA: { views: 0, clicks: 0, purchases: 0 },
-        versionB: { views: 0, clicks: 0, purchases: 0 }
+        versionA: { 
+            clicks: 0, 
+            cart_additions: 0, 
+            purchases: 0, 
+            cart_purchases: 0, 
+            direct_purchases: 0, 
+            errors: 0, 
+            page_loads: 0, 
+            total_page_load_time: 0 
+        },
+        versionB: { 
+            clicks: 0, 
+            cart_additions: 0, 
+            purchases: 0, 
+            cart_purchases: 0, 
+            direct_purchases: 0, 
+            errors: 0, 
+            page_loads: 0, 
+            total_page_load_time: 0 
+        }
     },
     autoSimulation: null,
     batchProcessor: null,
@@ -44,8 +63,8 @@ function updateRealTimeStatus() {
     // 총 상호작용 수 업데이트
     const totalElement = document.getElementById('totalInteractions');
     if (totalElement) {
-        const total = simulationState.stats.versionA.views + simulationState.stats.versionA.clicks + simulationState.stats.versionA.purchases + 
-                     simulationState.stats.versionB.views + simulationState.stats.versionB.clicks + simulationState.stats.versionB.purchases;
+        const total = simulationState.stats.versionA.clicks + simulationState.stats.versionA.cart_additions + simulationState.stats.versionA.purchases + simulationState.stats.versionA.errors + simulationState.stats.versionA.page_loads +
+                     simulationState.stats.versionB.clicks + simulationState.stats.versionB.cart_additions + simulationState.stats.versionB.purchases + simulationState.stats.versionB.errors + simulationState.stats.versionB.page_loads;
         totalElement.textContent = total;
     }
     
@@ -575,114 +594,355 @@ async function recordInteraction(version, interactionType) {
     
     const stats = simulationState.stats[`version${version}`];
     
-    // 논리적 검증 - 실제 서비스와 동일하게 제한
-    if (interactionType === 'click' && stats.views === 0) {
-        showNotification('노출 없이는 클릭할 수 없습니다. 먼저 노출 버튼을 클릭하세요.', 'warning');
+    // 새로운 지표 시스템 검증 로직
+    if (interactionType === 'add_to_cart' && stats.clicks === 0) {
+        showNotification('클릭 없이는 장바구니에 추가할 수 없습니다. 먼저 클릭 버튼을 클릭하세요.', 'warning');
         return;
     }
     
-    if (interactionType === 'purchase' && stats.views === 0) {
-        showNotification('노출 없이는 구매할 수 없습니다. 먼저 노출 버튼을 클릭하세요.', 'warning');
+    // 구매 시 직접구매 vs 장바구니구매 구분
+    if (interactionType === 'purchase') {
+        if (stats.clicks === 0) {
+            showNotification('클릭 없이는 구매할 수 없습니다. 먼저 클릭 버튼을 클릭하세요.', 'warning');
+            return;
+        }
+        
+        // 장바구니에 상품이 있는 경우 구매 유형 선택
+        if (stats.cart_additions > 0) {
+            const userChoice = confirm('장바구니에서 구매하시겠습니까?\n\n확인: 장바구니 구매\n취소: 직접 구매');
+            if (userChoice) {
+                await recordInteractionWithMetadata(version, interactionType, { purchase_type: 'from_cart' });
+                return;
+            }
+        }
+        
+        // 직접 구매
+        await recordInteractionWithMetadata(version, interactionType, { purchase_type: 'direct' });
         return;
     }
-    
-    // 노출당 1회만 클릭/구매 가능하도록 제한
-    if (interactionType === 'click' && stats.clicks >= stats.views) {
-        showNotification('모든 노출에서 클릭이 완료되었습니다. 더 많은 노출이 필요합니다.', 'warning');
+
+    // 가드레일 지표 (오류, 페이지 로드)는 제한 없음
+    if (interactionType === 'error' || interactionType === 'page_load') {
+        await recordSimpleInteraction(version, interactionType);
         return;
     }
-    
-    if (interactionType === 'purchase' && stats.purchases >= stats.views) {
-        showNotification('모든 노출에서 구매가 완료되었습니다. 더 많은 노출이 필요합니다.', 'warning');
-        return;
-    }
+
+    // 일반적인 상호작용 처리
+    await recordSimpleInteraction(version, interactionType);
+}
+
+// 메타데이터가 있는 상호작용 기록
+async function recordInteractionWithMetadata(version, interactionType, metadata = {}) {
+    const stats = simulationState.stats[`version${version}`];
     
     try {
-        const response = await fetch('http://localhost:8000/api/abtest/interaction', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                test_id: simulationState.testId,
-                variant: version === 'A' ? 'baseline' : 'challenger',
-                interaction_type: interactionType,
-                timestamp: new Date().toISOString()
-            })
-        });
+        // 서버에 전송
+        await recordInteractionToServerWithMetadata(version, interactionType, metadata);
         
-        if (response.ok) {
-            // 로컬 통계 업데이트
-            if (interactionType === 'view') {
-                simulationState.stats[`version${version}`].views++;
-            } else if (interactionType === 'click') {
-                simulationState.stats[`version${version}`].clicks++;
-            } else if (interactionType === 'purchase') {
-                simulationState.stats[`version${version}`].purchases++;
-            }
-            
-            updateStats();
-            
-            // 상호작용 발생 시 즉시 대시보드 업데이트
-            updateDashboardIfOpen();
-            
-            // 실시간 알림
-            if (interactionType === 'purchase') {
-                showNotification(`버전 ${version}에서 구매 발생! (테스트 ID: ${simulationState.testId})`, 'success');
-            } else if (interactionType === 'click') {
-                showNotification(`버전 ${version}에서 클릭 발생!`, 'info');
-            }
-        } else {
-            console.error('상호작용 기록 실패');
-        }
+        // 로컬 상태 업데이트
+        updateLocalStats(version, interactionType, metadata);
+        
+        // UI 업데이트
+        updateStats();
+        updateRealTimeStatus();
+        
+        showNotification(`${version} 버전 ${getInteractionDisplayName(interactionType)} 완료!`, 'success');
+        
     } catch (error) {
-        console.error('상호작용 기록 오류:', error);
+        console.error('상호작용 기록 실패:', error);
+        showNotification('상호작용 기록에 실패했습니다.', 'error');
     }
 }
+
+// 일반 상호작용 기록
+async function recordSimpleInteraction(version, interactionType) {
+    try {
+        // 서버에 전송
+        await recordInteractionToServer(version, interactionType);
+        
+        // 로컬 상태 업데이트
+        updateLocalStats(version, interactionType);
+        
+        // UI 업데이트
+        updateStats();
+        updateRealTimeStatus();
+        
+        showNotification(`${version} 버전 ${getInteractionDisplayName(interactionType)} 완료!`, 'success');
+        
+    } catch (error) {
+        console.error('상호작용 기록 실패:', error);
+        showNotification('상호작용 기록에 실패했습니다.', 'error');
+    }
+}
+
+// 로컬 통계 업데이트
+function updateLocalStats(version, interactionType, metadata = {}) {
+    const stats = simulationState.stats[`version${version}`];
+    
+    // 상호작용 타입별 매핑
+    if (interactionType === 'click') {
+        stats.clicks++;
+    } else if (interactionType === 'add_to_cart') {
+        stats.cart_additions++;
+    } else if (interactionType === 'purchase') {
+        stats.purchases++;
+        
+        // 구매 타입별 세분화
+        if (metadata.purchase_type === 'from_cart') {
+            stats.cart_purchases++;
+        } else {
+            stats.direct_purchases++;
+        }
+    } else if (interactionType === 'error') {
+        stats.errors++;
+    } else if (interactionType === 'page_load') {
+        stats.page_loads++;
+        // 페이지 로드 시간 시뮬레이션
+        const loadTime = Math.random() * 2000 + 500; // 500ms ~ 2500ms
+        stats.total_page_load_time += loadTime;
+    }
+}
+
+// 상호작용 표시명 반환
+function getInteractionDisplayName(interactionType) {
+    const displayNames = {
+        'click': '클릭',
+        'add_to_cart': '장바구니 추가',
+        'purchase': '구매',
+        'error': '오류',
+        'page_load': '페이지 로드'
+    };
+    return displayNames[interactionType] || interactionType;
+}
+
+// 메타데이터와 함께 서버로 전송
+async function recordInteractionToServerWithMetadata(version, interactionType, metadata = {}) {
+    const response = await fetch('http://localhost:8000/api/abtest/interaction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            test_id: simulationState.testId,
+            variant: version === 'A' ? 'baseline' : 'challenger',
+            interaction_type: interactionType,
+            metadata: metadata,
+            timestamp: new Date().toISOString()
+        })
+    });
+    
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+    }
+}
+
 
 // 통계 업데이트
 function updateStats() {
     const stats = simulationState.stats;
     
-    // 기본 통계
-    document.getElementById('viewsA').textContent = stats.versionA.views;
-    document.getElementById('viewsB').textContent = stats.versionB.views;
-    document.getElementById('clicksA').textContent = stats.versionA.clicks;
-    document.getElementById('clicksB').textContent = stats.versionB.clicks;
-    document.getElementById('purchasesA').textContent = stats.versionA.purchases;
-    document.getElementById('purchasesB').textContent = stats.versionB.purchases;
+    // 핵심 지표 - 기본 카운트
+    updateElementIfExists('clicksA', stats.versionA.clicks);
+    updateElementIfExists('clicksB', stats.versionB.clicks);
+    updateElementIfExists('purchasesA', stats.versionA.purchases);
+    updateElementIfExists('purchasesB', stats.versionB.purchases);
     
-    // 클릭률 계산 (노출 대비 클릭) - 노출당 클릭 비율
-    const clickRateA = stats.versionA.views > 0 ? (stats.versionA.clicks / stats.versionA.views * 100) : 0;
-    const clickRateB = stats.versionB.views > 0 ? (stats.versionB.clicks / stats.versionB.views * 100) : 0;
+    // 핵심 지표 - CVR (구매전환율: 구매수/클릭수)
+    const cvrA = stats.versionA.clicks > 0 ? (stats.versionA.purchases / stats.versionA.clicks * 100) : 0;
+    const cvrB = stats.versionB.clicks > 0 ? (stats.versionB.purchases / stats.versionB.clicks * 100) : 0;
+    updateElementIfExists('cvrA', `${cvrA.toFixed(2)}%`);
+    updateElementIfExists('cvrB', `${cvrB.toFixed(2)}%`);
     
-    // 전환율 계산 (노출 대비 구매) - 노출당 구매 비율
-    const conversionA = stats.versionA.views > 0 ? (stats.versionA.purchases / stats.versionA.views * 100) : 0;
-    const conversionB = stats.versionB.views > 0 ? (stats.versionB.purchases / stats.versionB.views * 100) : 0;
+    // 보조 지표 - 장바구니 관련
+    updateElementIfExists('cartAdditionsA', stats.versionA.cart_additions);
+    updateElementIfExists('cartAdditionsB', stats.versionB.cart_additions);
     
-    // 구매 전환율 계산 (클릭 대비 구매) - 클릭당 구매 비율
-    const purchaseRateA = stats.versionA.clicks > 0 ? (stats.versionA.purchases / stats.versionA.clicks * 100) : 0;
-    const purchaseRateB = stats.versionB.clicks > 0 ? (stats.versionB.purchases / stats.versionB.clicks * 100) : 0;
+    // 보조 지표 - 장바구니 추가율 (장바구니 추가수/클릭수)
+    const cartAddRateA = stats.versionA.clicks > 0 ? (stats.versionA.cart_additions / stats.versionA.clicks * 100) : 0;
+    const cartAddRateB = stats.versionB.clicks > 0 ? (stats.versionB.cart_additions / stats.versionB.clicks * 100) : 0;
+    updateElementIfExists('cartAddRateA', `${cartAddRateA.toFixed(2)}%`);
+    updateElementIfExists('cartAddRateB', `${cartAddRateB.toFixed(2)}%`);
     
-    document.getElementById('conversionA').textContent = `${conversionA.toFixed(2)}%`;
-    document.getElementById('conversionB').textContent = `${conversionB.toFixed(2)}%`;
+    // 보조 지표 - 장바구니 CVR (장바구니 구매수/장바구니 추가수)
+    const cartCvrA = stats.versionA.cart_additions > 0 ? Math.min((stats.versionA.cart_purchases / stats.versionA.cart_additions * 100), 100) : 0;
+    const cartCvrB = stats.versionB.cart_additions > 0 ? Math.min((stats.versionB.cart_purchases / stats.versionB.cart_additions * 100), 100) : 0;
+    updateElementIfExists('cartCvrA', `${cartCvrA.toFixed(2)}%`);
+    updateElementIfExists('cartCvrB', `${cartCvrB.toFixed(2)}%`);
     
-    // 개선율 계산
-    const improvement = conversionA > 0 ? ((conversionB - conversionA) / conversionA * 100) : 0;
-    document.getElementById('improvement').textContent = `${improvement.toFixed(2)}%`;
+    // 보조 지표 - 매출 (현재 테스트의 상품 가격 활용)
+    const productPrice = simulationState.testInfo?.product_price || 1200000;
+    const revenueA = stats.versionA.purchases * productPrice;
+    const revenueB = stats.versionB.purchases * productPrice;
+    updateElementIfExists('revenueA', formatCurrency(revenueA));
+    updateElementIfExists('revenueB', formatCurrency(revenueB));
     
-    // 통계적 유의성 계산 (간단한 버전)
-    const significance = calculateSignificance(stats);
-    document.getElementById('significance').textContent = significance;
+    // 가드레일 지표 - 오류 관련
+    updateElementIfExists('errorsA', stats.versionA.errors);
+    updateElementIfExists('errorsB', stats.versionB.errors);
     
-    // 색상 변경으로 승자 표시
-    updateWinnerDisplay(conversionA, conversionB);
+    // 가드레일 지표 - 오류율 (오류수/총상호작용수)
+    const totalInteractionsA = stats.versionA.clicks + stats.versionA.cart_additions + stats.versionA.purchases + stats.versionA.errors + stats.versionA.page_loads;
+    const totalInteractionsB = stats.versionB.clicks + stats.versionB.cart_additions + stats.versionB.purchases + stats.versionB.errors + stats.versionB.page_loads;
+    const errorRateA = totalInteractionsA > 0 ? (stats.versionA.errors / totalInteractionsA * 100) : 0;
+    const errorRateB = totalInteractionsB > 0 ? (stats.versionB.errors / totalInteractionsB * 100) : 0;
+    updateElementIfExists('errorRateA', `${errorRateA.toFixed(2)}%`);
+    updateElementIfExists('errorRateB', `${errorRateB.toFixed(2)}%`);
+    
+    // 가드레일 지표 - 평균 페이지 로드 시간
+    const avgLoadTimeA = stats.versionA.page_loads > 0 ? (stats.versionA.total_page_load_time / stats.versionA.page_loads) : 0;
+    const avgLoadTimeB = stats.versionB.page_loads > 0 ? (stats.versionB.total_page_load_time / stats.versionB.page_loads) : 0;
+    updateElementIfExists('avgLoadTimeA', `${Math.round(avgLoadTimeA)}ms`);
+    updateElementIfExists('avgLoadTimeB', `${Math.round(avgLoadTimeB)}ms`);
 }
 
-// 통계적 유의성 계산 (간단한 버전)
+// 안전한 DOM 업데이트 함수
+function updateElementIfExists(id, value) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.textContent = value;
+    }
+}
+
+// 통화 포맷팅 함수
+function formatCurrency(amount) {
+    return new Intl.NumberFormat('ko-KR', {
+        style: 'currency',
+        currency: 'KRW',
+        minimumFractionDigits: 0
+    }).format(amount);
+}
+
+// 누락된 함수들 추가
+function openDashboard() {
+    window.open('/test/dashboard.html', '_blank');
+}
+
+function openAIAnalysis() {
+    if (!simulationState.testId) {
+        showNotification('먼저 시뮬레이션을 시작하세요.', 'warning');
+        return;
+    }
+    window.open(`/test/dashboard.html#ai-analysis-${simulationState.testId}`, '_blank');
+}
+
+function openTestHistory() {
+    window.open('/test/dashboard.html#history', '_blank');
+}
+
+// 시뮬레이션 시작 함수
+function startSimulation() {
+    if (simulationState.isRunning) {
+        showNotification('시뮬레이션이 이미 실행 중입니다.', 'warning');
+        return;
+    }
+    
+    // 테스트 ID를 1로 설정 (기본값)
+    simulationState.testId = 1;
+    simulationState.isRunning = true;
+    
+    // 테스트 정보 로드 (기본값으로 설정)
+    simulationState.testInfo = {
+        id: 1,
+        name: "테스트 제품",
+        product_price: 1200000
+    };
+    
+    // 버튼 상태 업데이트
+    updateSimulationButtons();
+    
+    showNotification('시뮬레이션이 시작되었습니다!', 'success');
+    updateRealTimeStatus();
+}
+
+// 시뮬레이션 중지 함수
+function stopSimulation() {
+    if (!simulationState.isRunning) {
+        showNotification('시뮬레이션이 실행 중이 아닙니다.', 'warning');
+        return;
+    }
+    
+    simulationState.isRunning = false;
+    
+    // 자동 시뮬레이션 중지
+    if (simulationState.autoSimulation) {
+        clearInterval(simulationState.autoSimulation);
+        simulationState.autoSimulation = null;
+    }
+    
+    // 버튼 상태 업데이트
+    updateSimulationButtons();
+    
+    showNotification('시뮬레이션이 중지되었습니다.', 'info');
+    updateRealTimeStatus();
+}
+
+// 시뮬레이션 버튼 상태 업데이트
+function updateSimulationButtons() {
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    
+    if (simulationState.isRunning) {
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'inline-block';
+    } else {
+        startBtn.style.display = 'inline-block';
+        stopBtn.style.display = 'none';
+    }
+}
+
+// 시뮬레이션 초기화 함수
+function resetSimulation() {
+    // 시뮬레이션 중지
+    stopSimulation();
+    
+    // 통계 초기화
+    simulationState.stats = {
+        versionA: { 
+            clicks: 0, 
+            cart_additions: 0, 
+            purchases: 0, 
+            cart_purchases: 0, 
+            direct_purchases: 0, 
+            errors: 0, 
+            page_loads: 0, 
+            total_page_load_time: 0 
+        },
+        versionB: { 
+            clicks: 0, 
+            cart_additions: 0, 
+            purchases: 0, 
+            cart_purchases: 0, 
+            direct_purchases: 0, 
+            errors: 0, 
+            page_loads: 0, 
+            total_page_load_time: 0 
+        }
+    };
+    
+    // 성능 메트릭 초기화
+    simulationState.performanceMetrics = {
+        lastInteractionTime: Date.now(),
+        totalInteractions: 0,
+        serverErrors: 0,
+        lastTPS: 0,
+        tpsHistory: []
+    };
+    
+    // 상태 초기화
+    simulationState.testId = null;
+    simulationState.testInfo = null;
+    simulationState.isRunning = false;
+    
+    // UI 업데이트
+    updateStats();
+    updateRealTimeStatus();
+    updateSimulationButtons();
+    
+    showNotification('시뮬레이션이 초기화되었습니다.', 'success');
+}
+
+// 통계적 유의성 계산 (새로운 지표 시스템)
 function calculateSignificance(stats) {
-    const n1 = stats.versionA.views;
-    const n2 = stats.versionB.views;
+    const n1 = stats.versionA.clicks;
+    const n2 = stats.versionB.clicks;
     const p1 = stats.versionA.purchases / Math.max(n1, 1);
     const p2 = stats.versionB.purchases / Math.max(n2, 1);
     
@@ -730,8 +990,26 @@ function resetSimulation() {
     stopSimulation();
     
     simulationState.stats = {
-        versionA: { views: 0, clicks: 0, purchases: 0 },
-        versionB: { views: 0, clicks: 0, purchases: 0 }
+        versionA: { 
+            clicks: 0, 
+            cart_additions: 0, 
+            purchases: 0, 
+            cart_purchases: 0, 
+            direct_purchases: 0, 
+            errors: 0, 
+            page_loads: 0, 
+            total_page_load_time: 0 
+        },
+        versionB: { 
+            clicks: 0, 
+            cart_additions: 0, 
+            purchases: 0, 
+            cart_purchases: 0, 
+            direct_purchases: 0, 
+            errors: 0, 
+            page_loads: 0, 
+            total_page_load_time: 0 
+        }
     };
     
     // 성능 메트릭 초기화

@@ -9,6 +9,7 @@ class ABTestCreate(BaseModel):
     name: str = Field(..., description="테스트 이름")
     description: Optional[str] = Field(None, description="테스트 설명")
     product_id: str = Field(..., description="제품 ID")
+    product_price: float = Field(1000.0, description="상품 가격")
     test_duration_days: int = Field(30, description="테스트 기간 (일)")
     traffic_split_ratio: float = Field(0.5, description="트래픽 분배 비율")
     min_sample_size: int = Field(1000, description="최소 샘플 크기")
@@ -26,6 +27,7 @@ class ABTestResponse(BaseModel):
     name: str
     description: Optional[str]
     product_id: str
+    product_price: float
     status: TestStatus
     baseline_image_url: Optional[str] = None
     challenger_image_url: Optional[str] = None

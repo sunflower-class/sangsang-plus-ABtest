@@ -249,13 +249,9 @@
                     💡 완료된 테스트는 회색으로 표시되며 선택할 수 없습니다.
                 </div>
             </div>
+            <!-- 속도 조절 컨트롤 -->
             <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
-                <button class="control-btn btn-start" onclick="startSimulation()">시뮬레이션 시작</button>
-                <button class="control-btn btn-reset" onclick="resetSimulation()">초기화</button>
-                <button class="control-btn" onclick="resetTestData()" style="background: #e53e3e; color: white;">테스트 데이터 초기화</button>
-                
-                <!-- 속도 조절 컨트롤 -->
-                <div style="display: flex; align-items: center; gap: 10px; margin-left: 20px; padding: 8px 12px; background: #f7fafc; border-radius: 8px;">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #f7fafc; border-radius: 8px;">
                     <label style="font-size: 0.9rem; color: #4a5568; font-weight: 600;">⚡ 속도:</label>
                     <select id="speedControl" onchange="changeSimulationSpeed()" style="padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 4px; background: white;">
                         <option value="slow">🐌 느림 (4초)</option>
@@ -264,6 +260,11 @@
                         <option value="turbo">🚀 터보 (0.3초)</option>
                     </select>
                 </div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <button class="control-btn" onclick="startSimulation()" id="startBtn" style="background: #48bb78; color: white; font-weight: bold;">🚀 시뮬레이션 시작</button>
+                <button class="control-btn" onclick="stopSimulation()" id="stopBtn" style="background: #e53e3e; color: white; display: none;">⏹️ 시뮬레이션 중지</button>
+                <button class="control-btn" onclick="resetSimulation()" style="background: #f56565; color: white;">🔄 초기화</button>
             </div>
             <div style="display: flex; gap: 10px; margin-bottom: 15px;">
                 <button class="control-btn" onclick="openDashboard()" style="background: #38a169; color: white;">📊 대시보드 열기</button>
@@ -326,9 +327,11 @@
                 </div>
                 <div class="product-price" id="priceA">₩1,200,000</div>
                 <div class="action-buttons">
-                    <button class="btn btn-view" onclick="recordInteraction('A', 'view')" style="background: #718096;">노출</button>
-                    <button class="btn btn-view" onclick="recordInteraction('A', 'click')">상세보기</button>
+                    <button class="btn btn-view" onclick="recordInteraction('A', 'click')" style="background: #667eea;">클릭</button>
+                    <button class="btn btn-view" onclick="recordInteraction('A', 'add_to_cart')" style="background: #ed8936;">장바구니</button>
                     <button class="btn btn-buy" onclick="recordInteraction('A', 'purchase')">구매하기</button>
+                    <button class="btn btn-error" onclick="recordInteraction('A', 'error')" style="background: #e53e3e;">오류</button>
+                    <button class="btn btn-load" onclick="recordInteraction('A', 'page_load')" style="background: #38a169;">로드</button>
                 </div>
             </div>
             
@@ -342,9 +345,11 @@
                 </div>
                 <div class="product-price" id="priceB">₩1,200,000</div>
                 <div class="action-buttons">
-                    <button class="btn btn-view" onclick="recordInteraction('B', 'view')" style="background: #718096;">노출</button>
-                    <button class="btn btn-view" onclick="recordInteraction('B', 'click')">상세보기</button>
+                    <button class="btn btn-view" onclick="recordInteraction('B', 'click')" style="background: #667eea;">클릭</button>
+                    <button class="btn btn-view" onclick="recordInteraction('B', 'add_to_cart')" style="background: #ed8936;">장바구니</button>
                     <button class="btn btn-buy" onclick="recordInteraction('B', 'purchase')">구매하기</button>
+                    <button class="btn btn-error" onclick="recordInteraction('B', 'error')" style="background: #e53e3e;">오류</button>
+                    <button class="btn btn-load" onclick="recordInteraction('B', 'page_load')" style="background: #38a169;">로드</button>
                 </div>
             </div>
         </div>
@@ -352,21 +357,108 @@
         <div class="stats-panel">
             <h3>📊 실시간 통계</h3>
             <div style="background: #e6fffa; border: 1px solid #81e6d9; border-radius: 6px; padding: 10px; margin-bottom: 15px; font-size: 0.9rem;">
-                💡 <strong>올바른 플로우:</strong> 노출 → 상세보기 → 구매하기 (노출당 1회씩만 가능)
+                💡 <strong>새로운 플로우:</strong> 클릭 → 장바구니 추가 → 구매하기 | 가드레일: 오류, 로드시간
             </div>
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <span class="stat-value" id="viewsA">0</span>
-                    <span class="stat-label">버전 A 노출</span>
+            <!-- 핵심 지표 (Core Metrics) -->
+            <div style="background: #f0f8ff; border: 1px solid #4299e1; border-radius: 6px; padding: 15px; margin-bottom: 15px;">
+                <h4 style="margin: 0 0 10px 0; color: #2b6cb0;">🎯 핵심 지표 (Core Metrics)</h4>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-value" id="clicksA">0</span>
+                        <span class="stat-label">버전 A 클릭</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="clicksB">0</span>
+                        <span class="stat-label">버전 B 클릭</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="purchasesA">0</span>
+                        <span class="stat-label">버전 A 구매</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="purchasesB">0</span>
+                        <span class="stat-label">버전 B 구매</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="cvrA">0.0%</span>
+                        <span class="stat-label">버전 A CVR</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="cvrB">0.0%</span>
+                        <span class="stat-label">버전 B CVR</span>
+                    </div>
                 </div>
-                <div class="stat-item">
-                    <span class="stat-value" id="viewsB">0</span>
-                    <span class="stat-label">버전 B 노출</span>
+            </div>
+
+            <!-- 보조 지표 (Auxiliary Metrics) -->
+            <div style="background: #f0fff4; border: 1px solid #68d391; border-radius: 6px; padding: 15px; margin-bottom: 15px;">
+                <h4 style="margin: 0 0 10px 0; color: #2f855a;">📈 보조 지표 (Auxiliary Metrics)</h4>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-value" id="cartAdditionsA">0</span>
+                        <span class="stat-label">버전 A 장바구니</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="cartAdditionsB">0</span>
+                        <span class="stat-label">버전 B 장바구니</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="cartAddRateA">0.0%</span>
+                        <span class="stat-label">버전 A 장바구니율</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="cartAddRateB">0.0%</span>
+                        <span class="stat-label">버전 B 장바구니율</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="cartCvrA">0.0%</span>
+                        <span class="stat-label">버전 A 장바구니 CVR</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="cartCvrB">0.0%</span>
+                        <span class="stat-label">버전 B 장바구니 CVR</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="revenueA">₩0</span>
+                        <span class="stat-label">버전 A 매출</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="revenueB">₩0</span>
+                        <span class="stat-label">버전 B 매출</span>
+                    </div>
                 </div>
-                <div class="stat-item">
-                    <span class="stat-value" id="clicksA">0</span>
-                    <span class="stat-label">버전 A 클릭</span>
+            </div>
+
+            <!-- 가드레일 지표 (Guardrail Metrics) -->
+            <div style="background: #fef5e7; border: 1px solid #ed8936; border-radius: 6px; padding: 15px; margin-bottom: 15px;">
+                <h4 style="margin: 0 0 10px 0; color: #c05621;">🛡️ 가드레일 지표 (Guardrail Metrics)</h4>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-value" id="errorsA">0</span>
+                        <span class="stat-label">버전 A 오류</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="errorsB">0</span>
+                        <span class="stat-label">버전 B 오류</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="errorRateA">0.0%</span>
+                        <span class="stat-label">버전 A 오류율</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="errorRateB">0.0%</span>
+                        <span class="stat-label">버전 B 오류율</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="avgLoadTimeA">0ms</span>
+                        <span class="stat-label">버전 A 로드시간</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="avgLoadTimeB">0ms</span>
+                        <span class="stat-label">버전 B 로드시간</span>
+                    </div>
                 </div>
+            </div>
                 <div class="stat-item">
                     <span class="stat-value" id="clicksB">0</span>
                     <span class="stat-label">버전 B 클릭</span>

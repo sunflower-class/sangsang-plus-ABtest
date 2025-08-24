@@ -20,6 +20,19 @@ class ABTestService:
     def create_ab_test(self, test_data: Dict[str, Any]) -> ABTest:
         """A/B 테스트 생성 및 초기 버전 생성"""
         try:
+            # 새로운 지표 시스템의 기본값 강제 설정
+            test_data['weights'] = {
+                "cvr": 0.5,                    # 구매전환율 (구매 수 / 클릭 수) - 50%
+                "cart_add_rate": 0.2,          # 장바구니 추가율 (장바구니 추가 수 / 클릭 수) - 20%
+                "cart_conversion_rate": 0.2,   # 장바구니 전환율 (구매 수 / 장바구니 추가 수) - 20%
+                "revenue": 0.1                 # 매출 (구매 건수 * 구매 금액) - 10%
+            }
+            
+            test_data['guardrail_metrics'] = {
+                "page_load_time_max": 3.0,         # 최대 페이지 로드 시간 (3초)
+                "error_rate_threshold": 0.05       # 오류율 임계값 (5%)
+            }
+            
             # A/B 테스트 생성
             ab_test = ABTest(**test_data)
             self.db.add(ab_test)
@@ -110,73 +123,61 @@ class ABTestService:
             raise
 
     def calculate_ai_weights(self, test_id: int) -> Dict[str, float]:
-        """AI가 데이터 기반으로 최적 가중치 계산"""
-        try:
-            # 해당 테스트의 성과 데이터 분석
-            variants = self.db.query(Variant).filter(Variant.ab_test_id == test_id).all()
-            
-            if len(variants) < 2:
-                return {"ctr": 0.3, "cvr": 0.4, "revenue": 0.3}  # 기본값
-            
-            # 각 지표별 성과 분석
-            ctr_values = [v.clicks / max(v.impressions, 1) for v in variants]
-            cvr_values = [v.purchases / max(v.impressions, 1) for v in variants]
-            revenue_values = [v.revenue / max(v.impressions, 1) for v in variants]
-            
-            # 변동성 계산 (높은 변동성 = 높은 가중치)
-            ctr_variance = np.var(ctr_values) if len(ctr_values) > 1 else 0.001
-            cvr_variance = np.var(cvr_values) if len(cvr_values) > 1 else 0.001
-            revenue_variance = np.var(revenue_values) if len(revenue_values) > 1 else 0.001
-            
-            # 가중치 정규화
-            total_variance = ctr_variance + cvr_variance + revenue_variance
-            if total_variance == 0:
-                return {"ctr": 0.3, "cvr": 0.4, "revenue": 0.3}
-            
-            weights = {
-                "ctr": ctr_variance / total_variance,
-                "cvr": cvr_variance / total_variance,
-                "revenue": revenue_variance / total_variance
-            }
-            
-            # 최소 가중치 보장
-            min_weight = 0.1
-            for key in weights:
-                if weights[key] < min_weight:
-                    weights[key] = min_weight
-            
-            # 정규화
-            total = sum(weights.values())
-            weights = {k: v/total for k, v in weights.items()}
-            
-            logger.info(f"AI 가중치 계산 완료: {weights}")
-            return weights
-            
-        except Exception as e:
-            logger.error(f"AI 가중치 계산 실패: {e}")
-            return {"ctr": 0.3, "cvr": 0.4, "revenue": 0.3}
+        """고정된 가중치 반환 (새로운 지표 체계)"""
+        # 고정된 가중치: CVR 50%, Cart Add Rate 20%, Cart Conversion Rate 20%, Revenue 10%
+        return {"cvr": 0.5, "cart_add_rate": 0.2, "cart_conversion_rate": 0.2, "revenue": 0.1}
 
     def calculate_variant_ai_score(self, variant: Variant, weights: Dict[str, float]) -> float:
-        """개별 버전의 AI 점수 계산"""
+        """개별 버전의 AI 점수 계산 (새로운 지표 체계)"""
         try:
-            # 기본 지표 계산
-            ctr = variant.clicks / max(variant.impressions, 1)
-            cvr = variant.purchases / max(variant.impressions, 1)
-            revenue_per_impression = variant.revenue / max(variant.impressions, 1)
+            # 핵심 지표 계산
+            cvr = variant.purchases / max(variant.clicks, 1)                      # 구매전환율 (구매 수 / 클릭 수)
+            cart_add_rate = variant.cart_additions / max(variant.clicks, 1)       # 장바구니 추가율 (장바구니 추가 수 / 클릭 수)
             
-            # 가드레일 체크
-            if variant.bounce_rate > 0.8:  # 이탈률이 너무 높으면 페널티
-                return 0.0
+            # 장바구니 전환율: 장바구니 추가한 사용자 중 장바구니에서 구매한 비율 (100% 초과 방지)
+            if variant.cart_additions > 0 and variant.cart_purchases is not None:
+                cart_conversion_rate = min(variant.cart_purchases / variant.cart_additions, 1.0)
+            else:
+                cart_conversion_rate = 0.0
+                
+            revenue_per_click = variant.revenue / max(variant.clicks, 1)          # 클릭당 매출
             
-            # AI 점수 계산
-            score = (
-                ctr * weights.get("ctr", 0.3) +
-                cvr * weights.get("cvr", 0.4) +
-                revenue_per_impression * weights.get("revenue", 0.3)
+            # 가드레일 지표 계산 (이탈률 제외)
+            avg_page_load_time = variant.total_page_load_time / max(variant.total_page_loads, 1)  # 평균 페이지 로드 시간
+            error_rate = variant.errors / max(variant.clicks, 1)                   # 오류율 (클릭 대비)
+            
+            # 기본 AI 점수 계산 (새로운 가중치)
+            base_score = (
+                cvr * weights.get("cvr", 0.5) +                           # 구매전환율 50%
+                cart_add_rate * weights.get("cart_add_rate", 0.2) +       # 장바구니 추가율 20%
+                cart_conversion_rate * weights.get("cart_conversion_rate", 0.2) +  # 장바구니 전환율 20%
+                revenue_per_click * weights.get("revenue", 0.1) / 1000    # 매출 10% (정규화)
             )
             
-            # 신뢰도 계산 (샘플 크기 기반)
-            confidence = min(variant.impressions / 1000, 1.0)  # 최대 1000개 기준
+            # 가드레일 점수 계산 (이탈률 제외, 페널티만)
+            guardrail_score = 1.0  # 기본 배수 (페널티 없으면 그대로 유지)
+            
+            # 페이지 로드 시간 평가 (느릴수록 페널티)
+            if avg_page_load_time > 3.0:     # 3초 초과하면 큰 페널티
+                guardrail_score *= 0.3
+            elif avg_page_load_time > 2.0:   # 2초 초과하면 중간 페널티
+                guardrail_score *= 0.7
+            elif avg_page_load_time > 1.5:   # 1.5초 초과하면 작은 페널티
+                guardrail_score *= 0.9
+            
+            # 오류율 평가 (높을수록 페널티)
+            if error_rate > 0.05:            # 5% 초과하면 큰 페널티
+                guardrail_score *= 0.3
+            elif error_rate > 0.02:          # 2% 초과하면 중간 페널티
+                guardrail_score *= 0.7
+            elif error_rate > 0.01:          # 1% 초과하면 작은 페널티
+                guardrail_score *= 0.9
+            
+            # 최종 점수 = 기본 점수 × 가드레일 배수
+            score = base_score * guardrail_score
+            
+            # 신뢰도 계산 (클릭 수 기반)
+            confidence = min(variant.clicks / 1000, 1.0)  # 최대 1000 클릭 기준
             
             # 점수 업데이트
             variant.ai_score = score
@@ -367,12 +368,7 @@ class ABTestService:
         # CVR 계산
         variant.cvr = variant.purchases / variant.impressions if variant.impressions > 0 else 0
         
-        # 이탈률 계산 (실제로는 세션 데이터 필요)
-        # 여기서는 간단한 예시 - 더 현실적인 값으로 조정
-        variant.bounce_rate = 0.2  # 20% 이탈률로 조정
-        
-        # 평균 세션 지속시간 설정 (실제로는 세션 데이터 필요)
-        variant.avg_session_duration = 45.0  # 45초로 설정
+        # 성능 계산 완료 - 이탈률 제거됨
 
     def determine_winner(self, test_id: int) -> Optional[int]:
         """승자 결정 로직"""
@@ -444,8 +440,8 @@ class ABTestService:
             ctr=ctr,
             cvr=cvr,
             revenue_per_user=revenue_per_user,
-            bounce_rate=variant.bounce_rate,
-            avg_session_duration=variant.avg_session_duration,
+            bounce_rate=0.0,  # 이탈률 제거됨
+            avg_session_duration=0.0,  # 세션 지속시간 제거됨
             score=score
         )
 
@@ -521,11 +517,7 @@ class ABTestService:
 
     def _check_guardrails(self, metrics: VariantMetrics, guardrail_metrics: Dict[str, Any]) -> bool:
         """가드레일 검사"""
-        # 이탈률 검사 (기본값 0.8에서 0.9로 완화)
-        bounce_threshold = guardrail_metrics.get('bounce_rate_threshold', 0.9)
-        if metrics.bounce_rate > bounce_threshold:
-            logger.warning(f"이탈률 {metrics.bounce_rate:.3f}이 임계값 {bounce_threshold}을 초과")
-            return False
+        # 이탈률 검사 제거됨
 
         # 세션 지속시간 검사 - 테스트 환경에서는 건너뛰기
         # 실제 운영에서는 프론트엔드에서 세션 추적 필요

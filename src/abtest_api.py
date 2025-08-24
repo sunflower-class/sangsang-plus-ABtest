@@ -44,7 +44,7 @@ async def create_ab_test_with_images(
         service = ABTestService(db)
         
         # 필수 필드 검증
-        required_fields = ['name', 'product_id', 'baseline_image_url', 'challenger_image_url']
+        required_fields = ['name', 'product_id', 'product_price', 'baseline_image_url', 'challenger_image_url']
         for field in required_fields:
             if field not in test_data:
                 raise HTTPException(status_code=400, detail=f"필수 필드 누락: {field}")
@@ -166,10 +166,13 @@ async def get_winner_status(
                 "variant_type": variant.variant_type,
                 "ai_score": variant.ai_score,
                 "ai_confidence": variant.ai_confidence,
-                "impressions": variant.impressions,
                 "clicks": variant.clicks,
+                "cart_additions": variant.cart_additions,
                 "purchases": variant.purchases,
                 "revenue": variant.revenue,
+
+                "errors": variant.errors,
+                "total_page_loads": variant.total_page_loads,
                 "is_winner": variant.is_winner
             }
             result["variants"].append(variant_info)
@@ -202,11 +205,17 @@ async def get_ai_analysis(
                 "variant_name": variant.name,
                 "ai_score": score,
                 "ai_confidence": variant.ai_confidence,
-                "ctr": variant.clicks / max(variant.impressions, 1),
-                "cvr": variant.purchases / max(variant.impressions, 1),
-                "revenue_per_impression": variant.revenue / max(variant.impressions, 1),
-                "bounce_rate": variant.bounce_rate,
-                "impressions": variant.impressions
+                "cvr": variant.purchases / max(variant.clicks, 1),
+                "cart_add_rate": variant.cart_additions / max(variant.clicks, 1),
+                "cart_conversion_rate": min(variant.cart_purchases / max(variant.cart_additions, 1), 1.0) if variant.cart_additions > 0 and variant.cart_purchases is not None else 0.0,
+                "revenue_per_click": variant.revenue / max(variant.clicks, 1),
+
+                "error_rate": variant.errors / max(variant.clicks + variant.cart_additions + variant.purchases + variant.errors + variant.total_page_loads, 1),
+                "avg_page_load_time": variant.total_page_load_time / max(variant.total_page_loads, 1),
+                "clicks": variant.clicks,
+                "cart_additions": variant.cart_additions,
+                "purchases": variant.purchases,
+                "revenue": variant.revenue
             }
             variant_analysis.append(analysis)
         
@@ -539,8 +548,16 @@ async def create_test(
             "test_duration_days": test_data.get("test_duration_days", 7),
             "traffic_split_ratio": 0.5,
             "min_sample_size": 100,
-            "weights": {"ctr": 0.3, "cvr": 0.4, "revenue": 0.3},
-            "guardrail_metrics": {"bounce_rate_threshold": 0.8, "session_duration_min": 30}
+            "weights": {
+                "cvr": 0.5,                    # 구매전환율 (구매 수 / 클릭 수) - 50%
+                "cart_add_rate": 0.2,          # 장바구니 추가율 (장바구니 추가 수 / 클릭 수) - 20%
+                "cart_conversion_rate": 0.2,   # 장바구니 전환율 (구매 수 / 장바구니 추가 수) - 20%
+                "revenue": 0.1                 # 매출 (구매 건수 * 구매 금액) - 10%
+            },
+            "guardrail_metrics": {
+                "avg_page_load_time_threshold": 3000,  # 평균 페이지 로드 시간 임계값 (ms)
+                "error_rate_threshold": 0.05           # 오류율 임계값 (5%)
+            }
         }
         
         ab_test = service.create_ab_test(test_dict)

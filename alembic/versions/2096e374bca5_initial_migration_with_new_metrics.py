@@ -1,8 +1,8 @@
-"""Initial A/B test tables with complete schema
+"""initial_migration_with_new_metrics
 
-Revision ID: 97033cde847a
+Revision ID: 2096e374bca5
 Revises: 
-Create Date: 2025-08-19 05:41:21.827297
+Create Date: 2025-08-24 06:56:41.333265
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '97033cde847a'
+revision = '2096e374bca5'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -53,12 +53,14 @@ def upgrade() -> None:
     sa.Column('name', sa.String(length=100), nullable=False),
     sa.Column('content', sa.JSON(), nullable=False),
     sa.Column('content_hash', sa.String(length=64), nullable=False),
-    sa.Column('impressions', sa.Integer(), nullable=True),
     sa.Column('clicks', sa.Integer(), nullable=True),
     sa.Column('purchases', sa.Integer(), nullable=True),
+    sa.Column('cart_additions', sa.Integer(), nullable=True),
     sa.Column('revenue', sa.Float(), nullable=True),
-    sa.Column('bounce_rate', sa.Float(), nullable=True),
-    sa.Column('avg_session_duration', sa.Float(), nullable=True),
+    sa.Column('bounces', sa.Integer(), nullable=True),
+    sa.Column('total_page_loads', sa.Integer(), nullable=True),
+    sa.Column('total_page_load_time', sa.Float(), nullable=True),
+    sa.Column('errors', sa.Integer(), nullable=True),
     sa.Column('ai_score', sa.Float(), nullable=True),
     sa.Column('ai_confidence', sa.Float(), nullable=True),
     sa.Column('is_active', sa.Boolean(), nullable=True),
@@ -96,9 +98,9 @@ def upgrade() -> None:
     sa.Column('winner_score', sa.Float(), nullable=True),
     sa.Column('p_value', sa.Float(), nullable=True),
     sa.Column('confidence_level', sa.Float(), nullable=True),
-    sa.Column('total_impressions', sa.Integer(), nullable=True),
     sa.Column('total_clicks', sa.Integer(), nullable=True),
     sa.Column('total_purchases', sa.Integer(), nullable=True),
+    sa.Column('total_cart_additions', sa.Integer(), nullable=True),
     sa.Column('total_revenue', sa.Float(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['ab_test_id'], ['ab_tests.id'], ),
