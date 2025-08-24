@@ -241,14 +241,17 @@ async def list_ab_tests(
             {
                 "id": test.id,
                 "name": test.name,
-                "status": test.status.value,
+                "status": test.status if isinstance(test.status, str) else test.status.value,
                 "created_at": test.created_at.isoformat(),
                 "product_id": test.product_id
             }
             for test in tests
         ]
     except Exception as e:
-        # 오류가 발생해도 빈 배열 반환
+        # 오류 로깅 추가
+        print(f"list_ab_tests 오류: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return []
 
 @router.get("/test/{test_id}", response_model=ABTestResponse)
@@ -594,10 +597,7 @@ async def health_check():
     """헬스 체크"""
     return {"status": "OK", "message": "AI A/B Test Platform is running!"}
 
-@router.get("/")
-async def root():
-    """루트 엔드포인트"""
-    return {"message": "AI A/B Test Platform API"}
+# 중복된 루트 엔드포인트 제거 - list_ab_tests가 이미 / 경로를 사용
 
 # 추가 분석 엔드포인트들
 @router.get("/analytics/overview")
