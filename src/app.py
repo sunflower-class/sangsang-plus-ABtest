@@ -8,7 +8,11 @@ import uvicorn
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from confluent_kafka import Producer, Consumer, KafkaException
+
+# A/B 테스트 API 라우터 등록 (엔드포인트 정의 후에 수행)
+from .abtest_api import router as abtest_router
 
 # --- 설정 (변경 없음) ---
 KAFKA_BROKER = 'localhost:9092'
@@ -95,13 +99,41 @@ async def lifespan(app: FastAPI):
     else:
         print("Application shutdown.")
 
-# --- FastAPI 앱 생성 ---
-app = FastAPI(
-    lifespan=lifespan,
-    title="AI 기반 이커머스 A/B 테스트 플랫폼",
-    description="AI 기반 상세 페이지 자동 생성 및 A/B 테스트 자동화 플랫폼",
-    version="1.0.0"
-)
+# --- 앱 생성 및 설정 함수 ---
+def create_app() -> FastAPI:
+    # --- FastAPI 앱 생성 ---
+    app = FastAPI(
+        lifespan=lifespan,
+        title="AI 기반 이커머스 A/B 테스트 플랫폼",
+        description="AI 기반 상세 페이지 자동 생성 및 A/B 테스트 자동화 플랫폼",
+        version="1.0.0"
+    )
+
+    # 1. 모든 라우터를 먼저 포함시켜서 앱이 모든 경로를 알게 합니다.
+    app.include_router(abtest_router)
+
+    # 만약 main.py에 정의된 경로들도 별도 라우터라면 여기서 포함
+    # 예: app.include_router(main_py_router)
+
+    # 2. 모든 경로를 아는 상태에서 미들웨어를 추가합니다.
+    #    이제 미들웨어는 abtest_router의 경로에도 적용됩니다.
+    origins = [
+        "http://localhost:5172",
+        "http://localhost:5173", # front dev
+        "https://buildingbite.com"
+    ]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    return app
+
+# --- 앱 실행 ---
+app = create_app()
 
 # 정적 파일 서빙 설정
 try:
@@ -647,11 +679,6 @@ async def health_check(request: Request):
     if not request.app.state.producer:
          raise HTTPException(status_code=503, detail="Producer is not available")
     return {"status": "OK"}
-
-
-# A/B 테스트 API 라우터 등록 (엔드포인트 정의 후에 수행)
-from .abtest_api import router as abtest_router
-app.include_router(abtest_router)
 
 # --- 메인 실행 (미사용) ---
 if __name__ == '__main__':
