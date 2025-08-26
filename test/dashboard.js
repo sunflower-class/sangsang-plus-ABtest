@@ -463,8 +463,8 @@ async function loadAIAnalysis() {
                             <div class="ai-metric-value">${(variant.cart_conversion_rate * 100).toFixed(2)}%</div>
                         </div>
                         <div class="ai-metric">
-                            <div class="ai-metric-label">클릭당 매출</div>
-                            <div class="ai-metric-value">₩${variant.revenue_per_click.toFixed(0)}</div>
+                            <div class="ai-metric-label">매출</div>
+                            <div class="ai-metric-value">₩${variant.revenue.toLocaleString()}</div>
                         </div>
 
                         <div class="ai-metric">
