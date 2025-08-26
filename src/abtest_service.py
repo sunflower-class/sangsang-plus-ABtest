@@ -140,8 +140,6 @@ class ABTestService:
             else:
                 cart_conversion_rate = 0.0
                 
-            revenue_per_click = variant.revenue / max(variant.clicks, 1)          # 클릭당 매출
-            
             # 가드레일 지표 계산 (이탈률 제외)
             avg_page_load_time = variant.total_page_load_time / max(variant.total_page_loads, 1)  # 평균 페이지 로드 시간
             error_rate = variant.errors / max(variant.clicks, 1)                   # 오류율 (클릭 대비)
@@ -151,7 +149,7 @@ class ABTestService:
                 cvr * weights.get("cvr", 0.5) +                           # 구매전환율 50%
                 cart_add_rate * weights.get("cart_add_rate", 0.2) +       # 장바구니 추가율 20%
                 cart_conversion_rate * weights.get("cart_conversion_rate", 0.2) +  # 장바구니 전환율 20%
-                revenue_per_click * weights.get("revenue", 0.1) / 1000    # 매출 10% (정규화)
+                variant.revenue * weights.get("revenue", 0.1) / 1000000   # 총 매출 10% (정규화)
             )
             
             # 가드레일 점수 계산 (이탈률 제외, 페널티만)
