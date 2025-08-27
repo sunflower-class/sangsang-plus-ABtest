@@ -20,7 +20,7 @@ PORT_OPTS=""
 # PORT 변수가 비어있지 않은 경우 (포트가 입력된 경우)
 if [ -n "$PORT" ]; then
   # PORT_OPTS 변수에 포트 매핑 옵션 문자열을 할당
-  PORT_OPTS="-p $PORT:5001"
+  PORT_OPTS="-p $PORT:8000"
 fi
 
 # 네트워크 생성

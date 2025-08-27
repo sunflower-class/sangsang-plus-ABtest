@@ -27,14 +27,14 @@ bash ./scripts/docker-run.sh <DOCKER HUB ID> <SERVICE NAME> <SERVICE PORT: 옵�
 - `SERVICE PORT` 는 외부에서 접근 가능한 포트입니다.
 
 ```
-uvicorn src.app:app --host 0.0.0.0 --port 5001 --reload
+uvicorn src.app:app --host 0.0.0.0 --port 8000 --reload
 ```
 - 위 명령어 사용시 개발환경에서 동작합니다.
 
 ### 테스트
 
 ```
-curl -X GET "http://localhost:5001/python"
+curl -X GET "http://localhost:8000/python"
 ```
 - 초기 상태일 때 테스트 가능
 - `python API is running!` 라는 메세지 수신 시 테스트 성공
