@@ -861,9 +861,7 @@ function openAIAnalysis() {
     window.open(`/test/dashboard.html#ai-analysis-${simulationState.testId}`, '_blank');
 }
 
-function openTestHistory() {
-    window.open('/test/dashboard.html#history', '_blank');
-}
+
 
 // 알림 표시 함수
 function showNotification(message, type = 'info') {

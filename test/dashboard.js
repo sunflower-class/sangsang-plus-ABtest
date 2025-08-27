@@ -77,11 +77,7 @@ function handleUrlParameters() {
                 }
                 showMessage('AI 분석 뷰가 로드되었습니다.', 'info');
                 break;
-            case 'history':
-                showHistorySection();
-                loadRecentResults();
-                showMessage('테스트 히스토리 뷰가 로드되었습니다.', 'info');
-                break;
+
             case 'simulation':
                 showMessage('시뮬레이터에서 전환되었습니다. 실시간 데이터를 확인하세요.', 'info');
                 break;
@@ -120,14 +116,7 @@ function showAnalysisSection() {
     document.querySelector('header h1').textContent = '🧠 AI 분석 결과';
 }
 
-// 히스토리 섹션 표시
-function showHistorySection() {
-    // 모든 섹션 숨기기
-    hideAllSections();
-    
-    // 페이지 제목 변경
-    document.querySelector('header h1').textContent = '📈 테스트 히스토리';
-}
+
 
 // 모든 섹션 숨기기
 function hideAllSections() {
