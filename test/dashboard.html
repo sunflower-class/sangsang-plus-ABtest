@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI 기반 A/B 테스트 대시보드</title>
     <link rel="stylesheet" href="dashboard.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
@@ -99,71 +98,6 @@
                 <h2>AI 분석 결과</h2>
                 <div id="aiAnalysis">
                     <p>AI 분석 데이터를 불러오는 중...</p>
-                </div>
-            </div>
-
-            <!-- 성과 지표 (새로운 지표 체계) -->
-            <div class="card">
-                <h2>📈 핵심 성과 지표</h2>
-                <div class="metrics-grid">
-                    <div class="metric">
-                        <span class="metric-value" id="totalTests">0</span>
-                        <span class="metric-label">총 테스트</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-value" id="activeTests">0</span>
-                        <span class="metric-label">활성 테스트</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-value" id="totalClicks">0</span>
-                        <span class="metric-label">총 클릭</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-value" id="avgCvr">0%</span>
-                        <span class="metric-label">평균 CVR</span>
-                    </div>
-                </div>
-                <div class="metrics-grid" style="margin-top: 20px;">
-                    <div class="metric">
-                        <span class="metric-value" id="totalCartAdditions">0</span>
-                        <span class="metric-label">총 장바구니</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-value" id="totalPurchases">0</span>
-                        <span class="metric-label">총 구매</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-value" id="avgCartAddRate">0%</span>
-                        <span class="metric-label">평균 장바구니율</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-value" id="totalRevenue">₩0</span>
-                        <span class="metric-label">총 매출</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 차트 섹션 -->
-            <div class="card full-width">
-                <h2>📊 성과 비교 차트</h2>
-                <div class="chart-container" style="height: 400px !important; max-height: 400px !important; overflow: hidden;">
-                    <canvas id="performanceChart" style="height: 400px !important; max-height: 400px !important;"></canvas>
-                </div>
-            </div>
-
-            <!-- 최근 테스트 결과 -->
-            <div class="card full-width">
-                <h2>🏆 최근 테스트 결과</h2>
-                <div id="recentResults">
-                    <p>결과 데이터를 불러오는 중...</p>
-                </div>
-            </div>
-
-            <!-- 로그 섹션 -->
-            <div class="card full-width">
-                <h2>📝 실시간 로그</h2>
-                <div id="logs" class="logs-container">
-                    <p>로그를 불러오는 중...</p>
                 </div>
             </div>
         </div>

@@ -66,27 +66,7 @@ header p {
     padding-bottom: 10px;
 }
 
-/* 차트 컨테이너 스타일 */
-.chart-container {
-    position: relative;
-    height: 400px !important;
-    max-height: 400px !important;
-    overflow: hidden;
-    border-radius: 8px;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-}
 
-.chart-container canvas {
-    max-height: 400px !important;
-    height: 400px !important;
-}
-
-/* Chart.js 캔버스 강제 높이 제한 */
-#performanceChart {
-    max-height: 400px !important;
-    height: 400px !important;
-}
 
 /* 폼 스타일 */
 .form-group {
@@ -137,34 +117,7 @@ header p {
     transform: translateY(0);
 }
 
-/* 메트릭 스타일 */
-.metrics-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 20px;
-}
 
-.metric {
-    text-align: center;
-    padding: 20px;
-    background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-    border-radius: 10px;
-    border: 1px solid #e2e8f0;
-}
-
-.metric-value {
-    display: block;
-    font-size: 2rem;
-    font-weight: bold;
-    color: #667eea;
-    margin-bottom: 5px;
-}
-
-.metric-label {
-    font-size: 0.9rem;
-    color: #718096;
-    font-weight: 500;
-}
 
 /* 테스트 카드 스타일 */
 .test-card {
@@ -212,54 +165,7 @@ header p {
     font-size: 0.8rem;
 }
 
-/* 로그 스타일 */
-.logs-container {
-    max-height: 300px;
-    overflow-y: auto;
-    background: #f7fafc;
-    border-radius: 8px;
-    padding: 15px;
-    font-family: 'Courier New', monospace;
-    font-size: 0.9rem;
-}
 
-.log-entry {
-    padding: 8px 0;
-    border-bottom: 1px solid #e2e8f0;
-    display: flex;
-    align-items: center;
-}
-
-.log-entry:last-child {
-    border-bottom: none;
-}
-
-.log-timestamp {
-    color: #718096;
-    font-size: 0.8rem;
-    margin-right: 10px;
-    min-width: 80px;
-}
-
-.log-message {
-    color: #2d3748;
-}
-
-.log-level-info {
-    color: #3182ce;
-}
-
-.log-level-success {
-    color: #38a169;
-}
-
-.log-level-warning {
-    color: #d69e2e;
-}
-
-.log-level-error {
-    color: #e53e3e;
-}
 
 /* 상태 배지 */
 .status-badge {
@@ -289,10 +195,6 @@ header p {
 /* 반응형 디자인 */
 @media (max-width: 768px) {
     .dashboard-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .metrics-grid {
         grid-template-columns: 1fr;
     }
     
@@ -665,78 +567,4 @@ header p {
     }
 }
 
-/* 결과 비교 스타일 */
-.result-item {
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 10px;
-}
 
-.result-item h4 {
-    margin: 0 0 10px 0;
-    color: #2d3748;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.badge {
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-size: 0.8rem;
-    font-weight: 600;
-}
-
-.badge.winner {
-    background: #c6f6d5;
-    color: #22543d;
-}
-
-.badge.tie {
-    background: #fef5e7;
-    color: #744210;
-}
-
-.result-comparison {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-    margin: 15px 0;
-}
-
-.variant-stats {
-    background: #f7fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 6px;
-    padding: 12px;
-}
-
-.variant-stats h5 {
-    margin: 0 0 8px 0;
-    color: #4a5568;
-    font-size: 0.9rem;
-}
-
-.variant-stats p {
-    margin: 5px 0;
-    font-size: 0.85rem;
-    color: #718096;
-}
-
-.improvement {
-    margin: 10px 0 0 0;
-    padding: 8px 12px;
-    background: #e6fffa;
-    border-radius: 6px;
-    font-weight: 600;
-    color: #234e52;
-    text-align: center;
-}
-
-@media (max-width: 768px) {
-    .result-comparison {
-        grid-template-columns: 1fr;
-    }
-}

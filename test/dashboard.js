@@ -1,7 +1,6 @@
 // 전역 변수
 let currentTestId = null;
 let currentTestData = null;
-let performanceChart = null;
 
 // API 기본 URL
 const API_BASE_URL = 'http://localhost:8000/api/abtest';
@@ -30,11 +29,7 @@ function handleSimulationUpdate(data) {
     
     // 즉시 모든 데이터 새로고침
     Promise.all([
-        loadCurrentTests(),
-        loadAnalyticsOverview(),
-        loadPerformanceData(),
-        loadRecentResults(),
-        loadLogs()
+        loadCurrentTests()
     ]).then(() => {
         // 특정 테스트가 선택되어 있다면 해당 테스트 정보도 업데이트
         if (data.testId && currentTestId === data.testId) {
@@ -52,10 +47,6 @@ function handleSimulationUpdate(data) {
 // 대시보드 초기화
 function initializeDashboard() {
     loadCurrentTests();
-    loadAnalyticsOverview();
-    loadPerformanceData();
-    loadRecentResults();
-    loadLogs();
     
     // URL 파라미터 처리
     handleUrlParameters();
@@ -133,15 +124,6 @@ function showAnalysisSection() {
 function showHistorySection() {
     // 모든 섹션 숨기기
     hideAllSections();
-    
-    // 히스토리 관련 섹션들 표시
-    const resultsSection = document.querySelector('.card:has(#recentResults)');
-    const logsSection = document.querySelector('.card:has(#logs)');
-    const performanceSection = document.querySelector('.card:has(#performanceChart)');
-    
-    if (resultsSection) resultsSection.style.display = 'block';
-    if (logsSection) logsSection.style.display = 'block';
-    if (performanceSection) performanceSection.style.display = 'block';
     
     // 페이지 제목 변경
     document.querySelector('header h1').textContent = '📈 테스트 히스토리';
@@ -521,222 +503,7 @@ function showMessage(message, type = 'info') {
     }, 5000);
 }
 
-// 기존 함수들 (수정 없이 유지)
-async function loadAnalyticsOverview() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/analytics/overview`);
-        const data = await response.json();
-        
-        // 기본 정보
-        document.getElementById('totalTests').textContent = data.total_tests || 0;
-        document.getElementById('activeTests').textContent = data.active_tests || 0;
-        
-        // 새로운 지표들
-        document.getElementById('totalClicks').textContent = data.total_clicks || 0;
-        document.getElementById('totalCartAdditions').textContent = data.total_cart_additions || 0;
-        document.getElementById('totalPurchases').textContent = data.total_purchases || 0;
-        
-        // 평균 비율 계산
-        const avgCvr = data.total_clicks > 0 ? ((data.total_purchases / data.total_clicks) * 100) : 0;
-        const avgCartAddRate = data.total_clicks > 0 ? ((data.total_cart_additions / data.total_clicks) * 100) : 0;
-        
-        document.getElementById('avgCvr').textContent = `${avgCvr.toFixed(1)}%`;
-        document.getElementById('avgCartAddRate').textContent = `${avgCartAddRate.toFixed(1)}%`;
-        
-        // 총 매출 포맷팅
-        const totalRevenue = data.total_revenue || 0;
-        document.getElementById('totalRevenue').textContent = `₩${totalRevenue.toLocaleString()}`;
-        
-    } catch (error) {
-        console.error('분석 개요 로드 실패:', error);
-    }
-}
 
-async function loadPerformanceData() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/analytics/performance`);
-        const data = await response.json();
-        
-        if (data.performance && data.performance.length > 0) {
-            updatePerformanceChart(data.performance);
-        }
-    } catch (error) {
-        console.error('성과 데이터 로드 실패:', error);
-    }
-}
-
-function updatePerformanceChart(performanceData) {
-    const ctx = document.getElementById('performanceChart').getContext('2d');
-    
-    if (performanceChart) {
-        performanceChart.destroy();
-    }
-    
-    const labels = performanceData.map(item => item.product_name);
-    
-    // 새로운 지표 데이터 추출
-    const baselineCvr = performanceData.map(item => item.baseline_cvr || 0);
-    const challengerCvr = performanceData.map(item => item.challenger_cvr || 0);
-    const baselineCartAddRate = performanceData.map(item => item.baseline_cart_add_rate || 0);
-    const challengerCartAddRate = performanceData.map(item => item.challenger_cart_add_rate || 0);
-    const baselineCartCvr = performanceData.map(item => item.baseline_cart_cvr || 0);
-    const challengerCartCvr = performanceData.map(item => item.challenger_cart_cvr || 0);
-    
-    performanceChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: 'A안 CVR (구매전환율)',
-                    data: baselineCvr,
-                    backgroundColor: 'rgba(54, 162, 235, 0.8)',
-                    borderColor: 'rgba(54, 162, 235, 1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'B안 CVR (구매전환율)',
-                    data: challengerCvr,
-                    backgroundColor: 'rgba(255, 99, 132, 0.8)',
-                    borderColor: 'rgba(255, 99, 132, 1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'A안 장바구니 추가율',
-                    data: baselineCartAddRate,
-                    backgroundColor: 'rgba(75, 192, 192, 0.8)',
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'B안 장바구니 추가율',
-                    data: challengerCartAddRate,
-                    backgroundColor: 'rgba(255, 159, 64, 0.8)',
-                    borderColor: 'rgba(255, 159, 64, 1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'A안 장바구니 전환율',
-                    data: baselineCartCvr,
-                    backgroundColor: 'rgba(153, 102, 255, 0.8)',
-                    borderColor: 'rgba(153, 102, 255, 1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'B안 장바구니 전환율',
-                    data: challengerCartCvr,
-                    backgroundColor: 'rgba(255, 205, 86, 0.8)',
-                    borderColor: 'rgba(255, 205, 86, 1)',
-                    borderWidth: 1
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return value.toFixed(1) + '%';
-                        }
-                    }
-                }
-            },
-            plugins: {
-                legend: {
-                    position: 'top',
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
-                        }
-                    }
-                }
-            },
-            // 0값도 표시되도록 설정
-            elements: {
-                bar: {
-                    minBarLength: 2
-                }
-            }
-        }
-    });
-}
-
-async function loadRecentResults() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/analytics/performance`);
-        const data = await response.json();
-        
-        const container = document.getElementById('recentResults');
-        
-        if (data.performance && data.performance.length > 0) {
-            let html = '<div class="results-list">';
-            data.performance.slice(0, 5).forEach(result => {
-                const winnerBadge = result.winner === 'baseline' ? '<span class="badge winner">A안 승</span>' : 
-                                  result.winner === 'challenger' ? '<span class="badge winner">B안 승</span>' : 
-                                  '<span class="badge tie">무승부</span>';
-                
-                html += `
-                    <div class="result-item">
-                        <h4>${result.product_name} ${winnerBadge}</h4>
-                        <div class="result-comparison">
-                            <div class="variant-stats">
-                                <h5>A안 (기존)</h5>
-                                <p>노출: ${result.baseline_impressions} | 클릭: ${result.baseline_clicks} | 구매: ${result.baseline_purchases}</p>
-                                <p>클릭률: ${(result.baseline_click_rate * 100).toFixed(1)}% | 전환율: ${(result.baseline_conversion_rate * 100).toFixed(1)}%</p>
-                            </div>
-                            <div class="variant-stats">
-                                <h5>B안 (AI)</h5>
-                                <p>노출: ${result.challenger_impressions} | 클릭: ${result.challenger_clicks} | 구매: ${result.challenger_purchases}</p>
-                                <p>클릭률: ${(result.challenger_click_rate * 100).toFixed(1)}% | 전환율: ${(result.challenger_conversion_rate * 100).toFixed(1)}%</p>
-                            </div>
-                        </div>
-                        ${result.improvement_rate !== 0 ? `<p class="improvement">개선율: ${result.improvement_rate > 0 ? '+' : ''}${result.improvement_rate}%</p>` : ''}
-                    </div>
-                `;
-            });
-            html += '</div>';
-            container.innerHTML = html;
-        } else {
-            container.innerHTML = '<p>최근 결과가 없습니다.</p>';
-        }
-    } catch (error) {
-        console.error('최근 결과 로드 실패:', error);
-        document.getElementById('recentResults').innerHTML = '<p>결과를 불러올 수 없습니다.</p>';
-    }
-}
-
-async function loadLogs() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/logs`);
-        const data = await response.json();
-        
-        const container = document.getElementById('logs');
-        
-        if (data.logs && data.logs.length > 0) {
-            let html = '<div class="logs-list">';
-            data.logs.slice(0, 10).forEach(log => {
-                html += `
-                    <div class="log-item">
-                        <span class="log-time">${new Date(log.timestamp).toLocaleString()}</span>
-                        <span class="log-message">${log.message}</span>
-                    </div>
-                `;
-            });
-            html += '</div>';
-            container.innerHTML = html;
-        } else {
-            container.innerHTML = '<p>로그가 없습니다.</p>';
-        }
-    } catch (error) {
-        console.error('로그 로드 실패:', error);
-        document.getElementById('logs').innerHTML = '<p>로그를 불러오는 중 오류가 발생했습니다.</p>';
-    }
-}
 
 // 개별 테스트 삭제
 async function deleteTest(testId, testName) {
@@ -768,8 +535,6 @@ function startPeriodicUpdates() {
     setInterval(() => {
         console.log('주기적 업데이트 실행...');
         loadCurrentTests();
-        loadAnalyticsOverview();
-        loadPerformanceData();
         if (currentTestId) {
             loadAIAnalysis();
         }
@@ -781,11 +546,7 @@ function manualRefresh() {
     showMessage('데이터를 새로고침하는 중...', 'info');
     
     Promise.all([
-        loadCurrentTests(),
-        loadAnalyticsOverview(),
-        loadPerformanceData(),
-        loadRecentResults(),
-        loadLogs()
+        loadCurrentTests()
     ]).then(() => {
         if (currentTestId) {
             loadAIAnalysis();
