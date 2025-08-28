@@ -57,6 +57,8 @@ async def create_ab_test_with_images(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"이미지 기반 A/B 테스트 생성 실패: {str(e)}")
 
+
+
 @router.post("/test/{test_id}/determine-winner")
 async def determine_ai_winner(
     test_id: int,
@@ -150,32 +152,18 @@ async def get_winner_status(
         
         variants = db.query(Variant).filter(Variant.ab_test_id == test_id).all()
         
-        result = {
-            "test_id": test_id,
-            "status": test.status,
-            "ai_winner_id": test.ai_winner_variant_id,
-            "user_selected_winner_id": test.user_selected_winner_id,
-            "winner_selection_deadline": test.winner_selection_deadline.isoformat() if test.winner_selection_deadline else None,
-            "variants": []
-        }
+        # 승자 선택 가능 여부 확인
+        can_select_winner = test.status == TestStatus.WAITING_FOR_WINNER_SELECTION
+        winner_selected = test.user_selected_winner_id is not None
         
-        for variant in variants:
-            variant_info = {
-                "id": variant.id,
-                "name": variant.name,
-                "variant_type": variant.variant_type,
-                "ai_score": variant.ai_score,
-                "ai_confidence": variant.ai_confidence,
-                "clicks": variant.clicks,
-                "cart_additions": variant.cart_additions,
-                "purchases": variant.purchases,
-                "revenue": variant.revenue,
-
-                "errors": variant.errors,
-                "total_page_loads": variant.total_page_loads,
-                "is_winner": variant.is_winner
-            }
-            result["variants"].append(variant_info)
+        result = {
+            "status": test.status.value if hasattr(test.status, 'value') else str(test.status),
+            "winner_selected": winner_selected,
+            "can_select_winner": can_select_winner,
+            "ai_winner_id": test.ai_winner_variant_id,
+            "manual_winner_id": test.user_selected_winner_id,
+            "message": "승자 선택이 완료되었습니다." if winner_selected else "승자 선택이 필요합니다." if can_select_winner else "테스트가 완료되었습니다."
+        }
         
         return result
         
@@ -278,7 +266,11 @@ async def list_ab_tests(
                 "name": test.name,
                 "status": test.status if isinstance(test.status, str) else test.status.value,
                 "created_at": test.created_at.isoformat(),
-                "product_id": test.product_id
+                "product_id": test.product_id,
+                "baseline_image_url": test.baseline_image_url,
+                "challenger_image_url": test.challenger_image_url,
+                "product_name": test.product_name,
+                "product_price": test.product_price
             }
             for test in tests
         ]
