@@ -124,7 +124,7 @@ def create_app() -> FastAPI:
         "http://localhost:5175", # front dev
         "https://www.buildingbite.com",
         "https://buildingbite.com",
-        ,"https://oauth.buildingbite.com"
+        "https://oauth.buildingbite.com"
     ]
     app.add_middleware(
         CORSMiddleware,
